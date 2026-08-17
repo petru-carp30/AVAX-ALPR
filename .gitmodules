@@ -1,0 +1,6 @@
+[submodule "backend/Avax.ALPR.Api"]
+	path = backend/Avax.ALPR.Api
+	url = https://github.com/petru-carp30/Avax.ALPR.Api.git
+[submodule "mobile/Avax.ALPR.Guard"]
+	path = mobile/Avax.ALPR.Guard
+	url = https://github.com/petru-carp30/Avax.ALPR.Guard.git
