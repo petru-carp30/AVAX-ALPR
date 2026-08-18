@@ -36,6 +36,8 @@ CameraX, plate detection, OCR, AI integration, access-log upload, automatic back
 ## Documentation index
 
 - [Architecture](ARCHITECTURE.md)
+- [Architecture Decision Records](adr/)
+  - [ADR-001 — Vehicle Synchronization Strategy: Full Snapshot for Sync Contract v1](adr/ADR-001-vehicle-synchronization-full-snapshot-v1.md) — `PROPOSED`
 - [Roadmap](ROADMAP.md)
 - [API Contract](API_CONTRACT.md)
 - [Database](DATABASE.md)
