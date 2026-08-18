@@ -43,6 +43,7 @@ CameraX, plate detection, OCR, AI integration, access-log upload, automatic back
 - [Mobile Architecture](MOBILE_ARCHITECTURE.md)
 - [Security](SECURITY.md)
 - [Testing](TESTING.md)
+- [Changelog](CHANGELOG.md)
 
 `AI_PIPELINE.md` and `DEPLOYMENT.md` are intentionally not published yet because there is insufficient confirmed implementation to document them accurately.
 
