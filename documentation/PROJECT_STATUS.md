@@ -22,25 +22,80 @@ Plate Input
 
 Access logging works without backend connectivity, access logs survive application restart, and vehicle snapshot replacement does not delete access logs. Normal vehicle verification still does not require a backend request and the Guard App does not connect directly to SQL Server.
 
-## Next work packages
-
-### Backend — next P0
+## Current backend work package
 
 `BE-WP-003 — Access Log Ingestion API v1`
 
 - Priority: `P0 Critical`
-- Status: `TODO`
-- Dependency: `MOB-WP-002 — DONE`
-- Objective: define and implement a backend ingestion contract for mobile-generated access logs with idempotent handling based on the mobile log UUID.
+- Status: `IN PROGRESS`
+- Previous blocker: production vehicle access-log storage did not exist
+- Master decision: `APPROVED WITH MODIFICATIONS`
 
-### Mobile — follows backend contract
+The backend may continue implementation using the approved central vehicle access-log storage design below.
+
+### Approved production vehicle access-log storage
+
+Table:
+
+`dbo.AVAX_ALPR_ACCESS_LOGS`
+
+Approved fields:
+
+- `id BIGINT IDENTITY(1,1) NOT NULL` — internal database identity
+- `mobileEventId UNIQUEIDENTIFIER NOT NULL` — mobile-generated idempotency identity
+- `eventTimestampUtc DATETIME2(3) NOT NULL` — original mobile event time
+- `receivedAtUtc DATETIME2(3) NOT NULL` — server/database receive time
+- `licensePlate NVARCHAR(32) NOT NULL`
+- `normalizedPlate NVARCHAR(32) NOT NULL`
+- `sourceVehicleId INT NULL`
+- `accessArea VARCHAR(16) NOT NULL`
+- `accessDecision VARCHAR(24) NOT NULL`
+
+Approved constraints:
+
+- primary key on `id`
+- database-enforced UNIQUE constraint/index on `mobileEventId`
+- CHECK `accessArea IN ('ParkingLot', 'Site', 'Camp')`
+- CHECK `accessDecision IN ('Granted', 'Denied', 'NotYetValid', 'Expired', 'VehicleNotFound')`
+
+`receivedAtUtc` must be server/database controlled and must not be accepted as an authoritative client-supplied value. The preferred database behavior is a UTC default based on `SYSUTCDATETIME()`.
+
+`normalizedPlate` is mandatory for Access Log Contract v1. `InvalidInput` is not logged, and `VehicleNotFound` still results from a valid normalized plate that simply has no matching cached vehicle.
+
+No foreign key to `AVAX_VEHICLES` is approved at this stage because:
+
+- `VehicleNotFound` must remain persistable;
+- `AVAX_VEHICLES.id` does not currently provide an approved enforced relational identity guarantee.
+
+Idempotency semantics:
+
+- same `mobileEventId` + same logical client event -> successful idempotent acknowledgement and no duplicate row;
+- same `mobileEventId` + different logical client event -> `409 Conflict`;
+- concurrent duplicate inserts are protected by the database UNIQUE constraint;
+- idempotency comparison excludes server-generated `id` and `receivedAtUtc` and compares the persisted/canonical client event fields.
+
+Historical access decisions are stored as received and are not recalculated by the backend.
+
+The approved schema does not authorize unrelated changes to `AVAX_VEHICLES` or `dbo.AccessEntries`.
+
+### Implementation order after approval
+
+1. implement equivalent development/test persistence;
+2. implement repository and API contract;
+3. validate idempotency and concurrency behavior with automated tests;
+4. keep `AVAX_VEHICLES` and `dbo.AccessEntries` untouched;
+5. apply only the approved `dbo.AVAX_ALPR_ACCESS_LOGS` production DDL when the backend implementation is ready for the production-compatible persistence step;
+6. complete `POST /api/access-logs`, OpenAPI, build, security and regression validation;
+7. return a Master Handoff before BE-WP-003 can be marked `DONE`.
+
+## Next mobile work package
 
 `MOB-WP-003 — Background Access Log Upload`
 
 - Priority: `P0 Critical`
 - Status: `BLOCKED`
 - Dependency: `BE-WP-003`
-- Objective: upload locally pending access logs with retry/background execution after the backend contract exists.
+- Objective: upload locally pending access logs with retry/background execution after the backend ingestion contract is complete.
 
 Automatic background vehicle snapshot synchronization remains separate future work.
 
@@ -57,8 +112,6 @@ Automatic background vehicle snapshot synchronization remains separate future wo
 | BE-WP-002 | Vehicle Snapshot Sync API v1 | P0 | DONE |
 | MOB-WP-001 | Offline Vehicle Cache & Manual Access Verification | P0 | DONE |
 | MOB-WP-002 | Local Access Logging Foundation | P0 | DONE |
-
-No task is currently Master-confirmed as `IN PROGRESS`.
 
 ## Backend status
 
@@ -83,7 +136,7 @@ Sync Contract v1 is a complete vehicle snapshot and includes:
 
 The confirmed Sync v1 backend test suite passed `11/11` integration tests.
 
-A backend access-log ingestion contract is not yet implemented.
+`POST /api/access-logs` is not yet confirmed implemented; it remains part of BE-WP-003.
 
 ## Guard Mobile status
 
@@ -181,7 +234,11 @@ Logical relationships:
 - `AVAX_VEHICLES.pID -> People.pID`
 - `AVAX_VEHICLES.dID -> CompanyStructures.csID`
 
-The production database has not been recreated or modified by the confirmed AVAX ALPR implementation work.
+Access-log discovery additionally confirmed:
+
+- `dbo.AccessEntries` is used for person access logs and is not suitable for AVAX ALPR vehicle events;
+- no existing dedicated production vehicle access-log table was identified;
+- the existing production schema was not modified during discovery.
 
 ## Open technical debt and development follow-up
 
@@ -208,11 +265,13 @@ The full-snapshot architecture is implemented and physically validated, but impl
 
 `ARCH-001 — Vehicle Identity & Incremental Sync Strategy` remains `TODO / P1` and is required before a future incremental Sync v2. Incremental synchronization is not implemented.
 
-The use of the mobile-generated access-log UUID as the future backend idempotency key is the intended direction for `BE-WP-003`; the backend contract itself is not yet implemented or confirmed.
+### Access-log storage/idempotency decision
+
+Master has approved the dedicated `dbo.AVAX_ALPR_ACCESS_LOGS` design with the modifications recorded above. This is an accepted project decision for BE-WP-003 and should be backfilled into the Architecture Decision Record set by the Architecture chat.
 
 ## Explicitly not confirmed as implemented
 
-- backend access-log ingestion/upload
+- backend access-log ingestion API
 - WorkManager access-log upload
 - automatic background access-log synchronization
 - automatic background vehicle synchronization
