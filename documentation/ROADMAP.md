@@ -15,7 +15,7 @@ A task is marked `DONE` only after explicit Master confirmation that it was impl
 | BE-001 — Backend Baseline Audit & Build Validation | P0 | DONE | Backend baseline audited and build validated |
 | SEC-001 — Resolve Microsoft.OpenApi vulnerability | P0 | DONE | Vulnerability resolved and validated |
 | BE-002 — Validate Existing SQL Schema Relevant to ALPR | P0 | DONE | Production SQL Server schema audited read-only |
-| DEVDB-001 — Local SQLite Development Database Baseline | P0 | DONE | Development/test SQLite replica established |
+| DEVDB-001 — Local SQLite Development Database Baseline | P1 | DONE | Development/test SQLite replica established |
 | BE-WP-001 — Local Backend Vehicle Read API Foundation | P0 | DONE | Vehicle list and normalized plate lookup implemented |
 | BE-WP-002 — Vehicle Snapshot Sync API v1 | P0 | DONE | Complete snapshot contract implemented and tested |
 | MOB-WP-001 — Offline Vehicle Cache & Manual Access Verification | P0 | DONE | Offline-first Android vertical slice implemented and validated on a physical device |
