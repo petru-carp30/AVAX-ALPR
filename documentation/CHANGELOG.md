@@ -1,10 +1,10 @@
 # AVAX ALPR Changelog
 
-This changelog records only functionality, fixes, security remediations, and test results explicitly confirmed as implemented and tested.
+This changelog records only functionality, fixes, security remediations, and technical changes explicitly confirmed as implemented and tested by the project Master.
 
-No version number, release name, or release date is assigned unless explicitly confirmed by the project Master.
+Version numbers, releases, release names, and release dates are not recorded unless explicitly confirmed by the project Master.
 
-## Unreleased
+## Confirmed Implementation History
 
 ### Added
 
@@ -81,14 +81,3 @@ No version number, release name, or release date is assigned unless explicitly c
 - `0d3732f3`
 - `4eb09213`
 - `046fc8ac`
-
-### Not Yet Confirmed as Implemented
-
-The following functionality is intentionally excluded from implemented changelog entries because it has not been confirmed as implemented and tested:
-
-- automatic background vehicle synchronization;
-- CameraX;
-- AI plate detector;
-- OCR;
-- access log upload;
-- Manager functionality.
