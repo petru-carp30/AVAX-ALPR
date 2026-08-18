@@ -2,7 +2,7 @@
 
 Official technical documentation for the AVAX ALPR system.
 
-**Documentation status date:** 2026-08-17
+**Documentation status date:** 2026-08-18
 
 ## Confirmed project state
 
@@ -43,6 +43,7 @@ CameraX, plate detection, OCR, AI integration, access-log upload, automatic back
 - [Mobile Architecture](MOBILE_ARCHITECTURE.md)
 - [Security](SECURITY.md)
 - [Testing](TESTING.md)
+- [Technical Debt and Limitations](TECHNICAL_DEBT.md)
 - [Changelog](CHANGELOG.md)
 
 `AI_PIPELINE.md` and `DEPLOYMENT.md` are intentionally not published yet because there is insufficient confirmed implementation to document them accurately.

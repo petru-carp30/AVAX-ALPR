@@ -31,9 +31,10 @@ The production schema audit did not identify a reliable source mechanism for saf
 
 Relevant confirmed limitations include:
 
-- no enforced vehicle identity suitable for an incremental mobile contract
-- no database-enforced unique normalized license plate
+- no declared `PRIMARY KEY` or `IDENTITY` on `AVAX_VEHICLES`
+- no database-enforced unique license plate
 - no reliable change-tracking or modification marker for incremental synchronization
+- no indexes on `AVAX_VEHICLES`, including `licPlate`
 
 Current mitigations:
 
@@ -42,8 +43,11 @@ Current mitigations:
 | No reliable incremental identity | Sync Contract v1 transfers a complete snapshot |
 | Plate uniqueness not enforced at source | Backend normalization detects collisions and rejects the snapshot with `409 Conflict` |
 | No reliable incremental change marker | Guard Mobile replaces the complete Room snapshot transactionally |
+| No production vehicle lookup index | Current development uses the local SQLite development database; production indexing requires performance evidence and an approved database change |
 
 Permanent schema resolutions remain `PROPOSED` until explicitly accepted.
+
+These limitations are tracked in [Technical Debt and Limitations](TECHNICAL_DEBT.md). Their existence does not authorize production schema changes.
 
 ## Development data source
 
