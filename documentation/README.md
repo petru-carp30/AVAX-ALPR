@@ -35,6 +35,7 @@ CameraX, plate detection, OCR, AI integration, access-log upload, automatic back
 
 ## Documentation index
 
+- [Project Status](PROJECT_STATUS.md)
 - [Task Board](TASK_BOARD.md)
 - [Architecture](ARCHITECTURE.md)
 - [Architecture Decision Records](adr/)
