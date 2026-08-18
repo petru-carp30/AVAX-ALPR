@@ -1,6 +1,6 @@
 # AVAX ALPR Task Board
 
-**Board scope:** backlog, task status, priorities, and dependencies.
+**Board scope:** backlog, task status, priorities, dependencies, current/next work packages, and confirmed milestones.
 
 **Last Master-confirmed status update:** 2026-08-17
 
@@ -38,10 +38,31 @@ A task must not be marked `DONE` without explicit Master confirmation that imple
 | BE-007 | BE-WP-001 subtask | P0 | DONE | Master-confirmed as part of BE-WP-001 |
 | BE-008 | BE-WP-001 subtask | P0 | DONE | Master-confirmed as part of BE-WP-001 |
 | BE-009 | BE-WP-001 subtask | P0 | DONE | Master-confirmed as part of BE-WP-001 |
-| BE-WP-002 | Vehicle Snapshot Sync API v1 | P0 | DONE | Master-confirmed |
+| BE-WP-002 | Vehicle Snapshot Sync API v1 | P0 | DONE | Depends on BE-WP-001; Master-confirmed |
 | MOB-WP-001 | Offline Vehicle Cache & Manual Access Verification | P0 | DONE | Depends on BE-WP-001 and BE-WP-002; Master-confirmed on physical Android device |
 | MOB-WP-002 | Local Access Logging Foundation | P0 | TODO | Next P0 work package; depends on MOB-WP-001 |
 | ARCH-001 | Vehicle Identity & Incremental Sync Strategy | P1 | TODO | Required before a future incremental Sync v2; does not block current full-snapshot MVP |
+
+## Current and next work
+
+No task has been Master-confirmed as `IN PROGRESS` or `BLOCKED` in the planning history recorded here.
+
+The next confirmed P0 work package is:
+
+`MOB-WP-002 — Local Access Logging Foundation`
+
+- Priority: `P0`
+- Status: `TODO`
+- Dependency: `MOB-WP-001 — DONE`
+
+The architectural follow-up is:
+
+`ARCH-001 — Vehicle Identity & Incremental Sync Strategy`
+
+- Priority: `P1`
+- Status: `TODO`
+- Required before a future incremental Sync v2
+- Does not block the current full-snapshot MVP
 
 ## Confirmed backend synchronization milestone
 
@@ -106,13 +127,3 @@ The following remain outside the confirmed implementation state and must not be 
 - OCR
 - access log upload
 - Manager functionality
-
-## Current critical path
-
-The next confirmed P0 work package is:
-
-`MOB-WP-002 — Local Access Logging Foundation`
-
-Status: `TODO`.
-
-`ARCH-001 — Vehicle Identity & Incremental Sync Strategy` remains `P1 / TODO` and is required before a future incremental Sync v2.
