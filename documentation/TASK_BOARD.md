@@ -29,7 +29,7 @@ A task must not be marked `DONE` without explicit Master confirmation that imple
 | BE-001 | Backend Baseline Audit & Build Validation | P0 | DONE | Master-confirmed |
 | SEC-001 | Resolve NU1903 Microsoft.OpenApi Vulnerability | P0 | DONE | Master-confirmed |
 | BE-002 | Validate Existing SQL Schema Relevant to ALPR | P0 | DONE | Master-confirmed |
-| DEVDB-001 | Local SQLite Development Database Baseline | P0 | DONE | Master-confirmed |
+| DEVDB-001 | Local SQLite Development Database Baseline | P1 | DONE | Master-confirmed development/testing asset |
 | BE-WP-001 | Local Backend Vehicle Read API Foundation | P0 | DONE | Master-confirmed |
 | BE-003 | BE-WP-001 subtask | P0 | DONE | Master-confirmed as part of BE-WP-001 |
 | BE-004 | BE-WP-001 subtask | P0 | DONE | Master-confirmed as part of BE-WP-001 |
