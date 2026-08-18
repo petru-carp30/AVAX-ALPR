@@ -7,32 +7,42 @@ This file is the concise cross-project status snapshot. Detailed planning, archi
 
 ## Current milestone
 
-`MOB-WP-001 — Offline Vehicle Cache & Manual Access Verification` is confirmed `DONE`.
+`MOB-WP-002 — Local Access Logging Foundation` is confirmed `DONE`.
 
-The validated offline-first flow is:
+The validated local-first flow is:
 
 ```text
-Backend Sync API
-  -> Vehicle Snapshot Sync v1
-  -> Room transactional cache
-  -> Internet/backend unavailable
-  -> Application restart
-  -> Manual plate entry
-  -> Local normalized lookup
-  -> Local access decision
+Plate Input
+  -> Local Room Lookup
+  -> AccessChecker
+  -> AccessDecision
+  -> Local Access Log
+  -> Pending Sync
 ```
 
-This flow was validated on a physical Android device. Normal vehicle verification does not require a backend request and the Guard App does not connect directly to SQL Server.
+Access logging works without backend connectivity, access logs survive application restart, and vehicle snapshot replacement does not delete access logs. Normal vehicle verification still does not require a backend request and the Guard App does not connect directly to SQL Server.
 
-## Next work package
+## Next work packages
 
-`MOB-WP-002 — Local Access Logging Foundation`
+### Backend — next P0
+
+`BE-WP-003 — Access Log Ingestion API v1`
 
 - Priority: `P0 Critical`
 - Status: `TODO`
-- Dependency: `MOB-WP-001 — DONE`
+- Dependency: `MOB-WP-002 — DONE`
+- Objective: define and implement a backend ingestion contract for mobile-generated access logs with idempotent handling based on the mobile log UUID.
 
-Automatic background vehicle synchronization is not part of the confirmed implementation and remains future work.
+### Mobile — follows backend contract
+
+`MOB-WP-003 — Background Access Log Upload`
+
+- Priority: `P0 Critical`
+- Status: `BLOCKED`
+- Dependency: `BE-WP-003`
+- Objective: upload locally pending access logs with retry/background execution after the backend contract exists.
+
+Automatic background vehicle snapshot synchronization remains separate future work.
 
 ## Confirmed completed work
 
@@ -46,6 +56,7 @@ Automatic background vehicle synchronization is not part of the confirmed implem
 | BE-003 through BE-009 | BE-WP-001 implementation subtasks | P0 | DONE |
 | BE-WP-002 | Vehicle Snapshot Sync API v1 | P0 | DONE |
 | MOB-WP-001 | Offline Vehicle Cache & Manual Access Verification | P0 | DONE |
+| MOB-WP-002 | Local Access Logging Foundation | P0 | DONE |
 
 No task is currently Master-confirmed as `IN PROGRESS`.
 
@@ -71,6 +82,8 @@ Sync Contract v1 is a complete vehicle snapshot and includes:
 - read-only data access
 
 The confirmed Sync v1 backend test suite passed `11/11` integration tests.
+
+A backend access-log ingestion contract is not yet implemented.
 
 ## Guard Mobile status
 
@@ -104,6 +117,50 @@ Confirmed result colors in the current Guard UI:
 - `Denied` -> RED
 - `Expired`, `NotYetValid`, and unknown-type results -> YELLOW
 
+### Local access logging
+
+Confirmed local access-log implementation:
+
+- dedicated Room `access_logs` storage independent from the vehicle cache
+- `AccessLogEntity`
+- `AccessLogDao`
+- `AccessLogStore`
+- locally generated UUID identity
+- local ISO-8601 UTC event timestamp
+- explicit Parking Lot / Site / Camp area
+- explicit access result
+- synchronization states `Pending` and `Synced`
+- all new logs start as `Pending`
+- pending logs can be queried for future synchronization
+- Room migration `1 -> 2` preserves vehicles and sync metadata and creates access-log storage
+- no destructive migration
+- recent local access-event UI for functional visibility
+- access logs persist across application restart
+- access logs remain preserved across vehicle snapshot replacement/resynchronization
+
+Master-confirmed access-log semantics for the current logging contract:
+
+- `Granted` -> logged
+- `Denied` -> logged
+- `NotYetValid` -> logged
+- `Expired` -> logged
+- `VehicleNotFound` -> logged
+- `InvalidInput` -> not logged
+- `DataUnavailable` -> not logged
+
+`InvalidInput` is treated as an invalid operator/input state rather than a completed vehicle access attempt. `DataUnavailable` is treated as a technical/cache availability state rather than a vehicle access decision. Diagnostic/operator telemetry, if required later, must be handled separately from the access-event log.
+
+Confirmed MOB-WP-002 automated validation:
+
+- unit tests: `22/22 PASS`
+- Android instrumentation tests: `21/21 PASS`
+- total: `43/43 PASS`
+- `AccessLogStoreTest`: `8/8 PASS`
+- `GuardDatabaseMigrationTest`: `1/1 PASS`
+- MOB-WP-001 regression tests remain green
+
+Physical-device offline logging was validated on a Google Pixel 6 Pro. A historical physical Room v1-to-v2 migration was not demonstrated because the device database was empty before synchronization; migration compatibility is confirmed by the automated migration test only.
+
 ## Production database findings
 
 The production `AVAX_VEHICLES` audit confirmed:
@@ -126,9 +183,9 @@ Logical relationships:
 
 The production database has not been recreated or modified by the confirmed AVAX ALPR implementation work.
 
-## Open technical debt
+## Open technical debt and development follow-up
 
-The following remain open:
+The following production technical-debt entries remain open:
 
 - `TD-001` — `AVAX_VEHICLES` lacks enforced primary identity
 - `TD-002` — license plate uniqueness is not enforced
@@ -136,6 +193,10 @@ The following remain open:
 - `TD-004` — no vehicle lookup index in the production schema
 
 These entries do not authorize production schema changes.
+
+A separate backend development-environment follow-up is required because the ASP.NET Core development backend currently binds to localhost by default. Physical-device LAN validation succeeded with an explicit temporary `0.0.0.0:5079` binding. This does not block MOB-WP-002 and is not a mobile defect.
+
+No access-log retention policy is currently defined. Automatic access-log deletion is not implemented.
 
 ## Architecture decision status
 
@@ -147,11 +208,15 @@ The full-snapshot architecture is implemented and physically validated, but impl
 
 `ARCH-001 — Vehicle Identity & Incremental Sync Strategy` remains `TODO / P1` and is required before a future incremental Sync v2. Incremental synchronization is not implemented.
 
+The use of the mobile-generated access-log UUID as the future backend idempotency key is the intended direction for `BE-WP-003`; the backend contract itself is not yet implemented or confirmed.
+
 ## Explicitly not confirmed as implemented
 
+- backend access-log ingestion/upload
+- WorkManager access-log upload
+- automatic background access-log synchronization
 - automatic background vehicle synchronization
-- local access logging
-- access-log upload
+- automatic access-log deletion or retention policy
 - CameraX
 - plate detector
 - OCR
@@ -175,6 +240,8 @@ Guard Mobile:
 - `0d3732f3` — domain access logic and transactional Room cache foundation
 - `4eb09213` — snapshot networking and validated Room synchronization
 - `046fc8ac` — manual offline verification and Android 17 local-network support
+
+MOB-WP-002 reference commit is not yet recorded in Master because the handoff reports it as pending local commit.
 
 ## Documentation map
 
