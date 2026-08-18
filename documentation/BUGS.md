@@ -11,7 +11,7 @@ An issue is marked `RESOLVED / VALIDATED` only when both remediation implementat
 ### SEC-001 — Microsoft.OpenApi NU1903 vulnerability
 
 - **Type:** Vulnerability
-- **Severity:** Not assigned in the confirmed history
+- **Severity:** High
 - **Component:** AVAX ALPR Backend & Database / .NET dependencies
 - **Status:** RESOLVED / VALIDATED
 - **Cause:** The backend dependency graph included transitive `Microsoft.OpenApi 2.0.0`, reported through `NU1903`.
