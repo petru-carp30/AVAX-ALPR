@@ -4,7 +4,9 @@
 
 Statuses used: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 
-A task is marked `DONE` only after explicit confirmation that it was implemented and tested.
+Priorities used: `P0` Critical, `P1` High, `P2` Medium, `P3` Low.
+
+A task is marked `DONE` only after explicit Master confirmation that it was implemented and tested/validated.
 
 ## Confirmed completed foundations
 
@@ -18,11 +20,40 @@ A task is marked `DONE` only after explicit confirmation that it was implemented
 | BE-WP-002 — Vehicle Snapshot Sync API v1 | P0 | DONE | Complete snapshot contract implemented and tested |
 | MOB-WP-001 — Offline Vehicle Cache & Manual Access Verification | P0 | DONE | Offline-first Android vertical slice implemented and validated on a physical device |
 
-## Current next work
+## Current and next work
 
-| Work item | Priority | Status | Objective |
+No work package is currently Master-confirmed as `IN PROGRESS` or `BLOCKED`.
+
+| Work item | Priority | Status | Dependency / objective |
 |---|---:|---|---|
-| MOB-WP-002 — Local Access Logging Foundation | P0 | TODO | Persist local access verification events as the foundation for later synchronization |
+| MOB-WP-002 — Local Access Logging Foundation | P0 | TODO | Depends on MOB-WP-001; persist local access verification events as the foundation for later synchronization |
+| ARCH-001 — Vehicle Identity & Incremental Sync Strategy | P1 | TODO | Required before a future incremental Sync v2; does not block the current full-snapshot MVP |
+
+Current critical path:
+
+`MOB-WP-001 — DONE -> MOB-WP-002 — TODO`
+
+Current architectural follow-up:
+
+`ARCH-001 — TODO / P1`
+
+## Confirmed milestones
+
+### Backend synchronization milestone — DONE
+
+`BE-WP-002 — Vehicle Snapshot Sync API v1`
+
+Confirmed outcome:
+
+`Backend vehicle data -> GET /api/sync/vehicles -> full snapshot contract v1`
+
+### Mobile offline verification milestone — DONE
+
+`MOB-WP-001 — Offline Vehicle Cache & Manual Access Verification`
+
+Confirmed physical-device flow:
+
+`Backend Sync API -> Room -> Internet OFF -> Application Restart -> Manual Plate Entry -> Local Lookup -> Local Access Result`
 
 ## Phased roadmap
 
@@ -30,13 +61,15 @@ A task is marked `DONE` only after explicit confirmation that it was implemented
 
 Core read API, Sync v1 contract, Room cache, and manual offline verification are confirmed complete.
 
-Automatic background vehicle synchronization remains future work.
+Automatic background vehicle synchronization remains future work and is not confirmed as implemented.
 
 ### Phase 2 — Offline access verification and logs
 
-Manual local verification is complete. Local access logging is next.
+Manual local verification is complete.
 
-Access-log upload and conflict/retry behavior are not yet confirmed.
+`MOB-WP-002 — Local Access Logging Foundation` is the next confirmed P0 work package and remains `TODO`.
+
+Access-log upload and conflict/retry behavior are not yet confirmed as implemented.
 
 ### Phase 3 — CameraX
 
@@ -59,3 +92,9 @@ The AI system must produce recognition data only; it must not decide access.
 ### Phase 7 — Security, testing, deployment, and documentation
 
 Some security and testing foundations already exist. Production authentication, authorization, deployment architecture, operational monitoring, and release readiness are not yet confirmed.
+
+## Incremental synchronization dependency
+
+The current MVP uses full-snapshot synchronization.
+
+`ARCH-001 — Vehicle Identity & Incremental Sync Strategy` remains `P1 / TODO` and is required before a future incremental Sync v2. No incremental Sync v2 implementation is currently confirmed.
