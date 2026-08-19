@@ -7,43 +7,43 @@ This file is the concise cross-project status snapshot. Detailed planning, archi
 
 ## Current milestone
 
-`BE-WP-003 — Access Log Ingestion API v1` is confirmed `DONE` for the development/API-contract scope.
+`MOB-WP-003 — Background Access Log Upload` is confirmed `DONE`.
 
-Confirmed development vertical slice:
+The validated offline-first access-log flow is now:
 
 ```text
-POST /api/access-logs
-  -> AccessLogsController
-  -> AccessLogService
-  -> AccessLogRepository
-  -> development SQLite AVAX_ALPR_ACCESS_LOGS
+Local Access Decision
+  -> Local Access Log persisted in Room
+  -> Pending
+  -> WorkManager
+  -> POST /api/access-logs
+  -> Stored / AlreadyStored
+  -> Synced
 ```
 
-The API provides idempotent access-log ingestion based on the mobile-generated UUID, deterministic retry behavior, historical event preservation, concurrency-safe duplicate protection, sanitized errors, and OpenAPI coverage.
+The Guard App still performs normal vehicle verification and access logging locally without backend connectivity. Access-log synchronization happens separately in the background when connectivity becomes available.
 
-Production SQL Server remained read-only during BE-WP-003. The approved `dbo.AVAX_ALPR_ACCESS_LOGS` production design has NOT yet been physically deployed, and the current runtime access-log persistence adapter is development SQLite only.
+## Next work package
 
-## Next work packages
-
-### Mobile — next P0
-
-`MOB-WP-003 — Background Access Log Upload`
+`CAM-WP-001 — CameraX Foundation`
 
 - Priority: `P0 Critical`
 - Status: `TODO`
-- Dependency: `BE-WP-003 — DONE`
-- Objective: upload locally `Pending` access logs to `POST /api/access-logs`, retry safely under unstable connectivity, and mark a local event `Synced` only after `Stored` or `AlreadyStored` acknowledgement.
+- Target project: AVAX ALPR – Guard Mobile App
+- Objective: establish a stable CameraX preview and frame-analysis foundation without introducing detector/OCR logic yet.
 
-### Production persistence follow-up
+This starts Phase 3 of the development roadmap.
+
+## Production persistence follow-up
 
 `BE-WP-004 — SQL Server Access Log Persistence & Controlled Deployment`
 
 - Priority: `P0 before production`
 - Status: `TODO`
+- Target project: AVAX ALPR – Backend & Database
 - Dependency: approved `dbo.AVAX_ALPR_ACCESS_LOGS` design and BE-WP-003 API contract
-- Objective: deploy the approved production table through a controlled SQL Server change and implement/configure the production SQL Server persistence adapter without changing the public Access Log API v1 contract.
 
-The lack of production deployment does not block mobile development against the validated v1 API contract, but it blocks production central access-log storage.
+The production access-log table and SQL Server runtime persistence adapter are still not deployed. This does not block CameraX or continued mobile development, but it blocks production central access-log storage.
 
 ## Confirmed completed work
 
@@ -59,10 +59,9 @@ The lack of production deployment does not block mobile development against the 
 | MOB-WP-001 | Offline Vehicle Cache & Manual Access Verification | P0 | DONE |
 | MOB-WP-002 | Local Access Logging Foundation | P0 | DONE |
 | BE-WP-003 | Access Log Ingestion API v1 | P0 | DONE |
+| MOB-WP-003 | Background Access Log Upload | P0 | DONE |
 
 ## Backend status
-
-Confirmed backend project: `Avax.ALPR.Api` on `.NET 10.0`.
 
 Confirmed endpoints:
 
@@ -71,146 +70,89 @@ Confirmed endpoints:
 - `GET /api/sync/vehicles`
 - `POST /api/access-logs`
 
-### Access Log Ingestion API v1
+Access Log API v1 semantics:
 
-Confirmed request concepts:
-
-- `mobileEventId`
-- `eventTimestampUtc`
-- `licensePlate`
-- `normalizedPlate`
-- nullable `sourceVehicleId`
-- `accessArea`
-- `accessDecision`
-
-Accepted access areas:
-
-- `ParkingLot`
-- `Site`
-- `Camp`
-
-Accepted access decisions:
-
-- `Granted`
-- `Denied`
-- `NotYetValid`
-- `Expired`
-- `VehicleNotFound`
-
-Rejected as access-log events:
-
-- `InvalidInput`
-- `DataUnavailable`
-
-Confirmed HTTP semantics:
-
-- new event -> `201 Created`, status `Stored`
-- identical retry -> `200 OK`, status `AlreadyStored`
-- same UUID with different logical event data -> `409 Conflict`
-
-`receivedAtUtc` is persistence-controlled and is not accepted as authoritative client data. `eventTimestampUtc` preserves the original mobile event time and is canonicalized to millisecond precision for compatibility with the approved future SQL Server `DATETIME2(3)` contract.
-
-Historical decisions are never recalculated or overwritten during ingestion.
-
-`VehicleNotFound` is valid with `sourceVehicleId = NULL` and does not require an existing central vehicle row.
-
-### Idempotency and concurrency
-
-`mobileEventId` is the canonical idempotency identity.
-
-Logical comparison includes:
-
-- `mobileEventId`
-- `eventTimestampUtc`
-- `licensePlate`
-- `normalizedPlate`
-- `sourceVehicleId`
-- `accessArea`
-- `accessDecision`
-
-Server-generated `id` and `receivedAtUtc` are excluded.
-
-The development persistence layer enforces UNIQUE `mobileEventId`. Concurrent duplicate handling was tested and confirmed to leave exactly one logical row.
-
-### BE-WP-003 validation
-
-Confirmed:
-
-- `39/39` automated tests passed
-- `28` Access Log API tests
-- existing `11` Vehicle Sync tests remain green
-- build passed with `0` errors
-- three xUnit analyzer `xUnit2031` warnings remain in existing test style
-- vulnerability scan reports no vulnerable packages
-- `/openapi/v1.json` returns HTTP 200 and contains the access-log POST contract
-- manual identical retry produced `201 Stored`, then `200 AlreadyStored`, with exactly one row for the UUID
+- new event -> `201 Created`, `Stored`
+- identical retry -> `200 OK`, `AlreadyStored`
+- same UUID with different logical data -> `409 Conflict`
+- mobile `eventTimestampUtc` is preserved
+- `receivedAtUtc` is persistence-controlled
+- `VehicleNotFound` is valid with `sourceVehicleId = NULL`
+- historical decisions are not recalculated or overwritten
 
 Backend implementation reference commit:
 
 `88005bf7cd231fc79708f767552499e29fc8da9f`
 
-### Development environment
-
-A development-only LAN launch profile now listens on:
-
-`http://0.0.0.0:5079`
-
-Existing localhost profiles remain available. No production listener/deployment configuration was changed.
-
-The current development SQLite path is:
-
-`../../DevelopmentData/avax_alpr_dev.db`
-
 ## Guard Mobile status
 
-Confirmed mobile baseline includes:
+Confirmed offline-first mobile capabilities now include:
 
-- Kotlin / Jetpack Compose
-- Room / SQLite
 - Vehicle Snapshot Sync v1 client
-- transactional snapshot replacement
-- synchronization metadata
-- deterministic `PlateNormalizer`
-- local `AccessChecker`
-- manual Room lookup
-- Parking Lot, Site, and Camp evaluation
-- persistence across application restart
-- Android 17 Local Network Protection support on API 37+
+- transactional Room vehicle cache
+- local plate normalization
+- local access verification for Parking Lot, Site, and Camp
+- local access logging
+- background access-log synchronization
+- application-start recovery
+- Android 17 Local Network Protection support
 
-### Local access logging
+### Access-log synchronization states
 
-Confirmed local access-log implementation:
+Confirmed states:
 
-- dedicated Room `access_logs` storage independent from the vehicle cache
-- locally generated UUID identity
-- local ISO-8601 UTC event timestamp
-- explicit Parking Lot / Site / Camp area
-- explicit access result
-- synchronization states `Pending` and `Synced`
-- all new logs start as `Pending`
-- pending logs can be queried for future synchronization
-- Room migration `1 -> 2` preserves vehicles and sync metadata and creates access-log storage
-- no destructive migration
-- recent local access-event UI for functional visibility
-- access logs persist across application restart
-- access logs remain preserved across vehicle snapshot replacement/resynchronization
+- `Pending`
+- `Synced`
+- `Conflict`
+- `Rejected`
 
-Master-confirmed access-log semantics:
+Semantics:
 
-- `Granted` -> logged
-- `Denied` -> logged
-- `NotYetValid` -> logged
-- `Expired` -> logged
-- `VehicleNotFound` -> logged
-- `InvalidInput` -> not logged
-- `DataUnavailable` -> not logged
+- `Pending` -> eligible for background upload/retry
+- `Synced` -> backend returned `Stored` or `AlreadyStored`
+- `Conflict` -> backend returned `409`; preserved locally and excluded from normal retry
+- `Rejected` -> permanent contract/request rejection; preserved locally and excluded from infinite retry
 
-Confirmed MOB-WP-002 validation:
+Transient failures such as no network, timeout, connection failure, or HTTP 5xx keep the event `Pending`.
 
-- unit tests: `22/22 PASS`
-- Android instrumentation tests: `21/21 PASS`
-- total: `43/43 PASS`
-- physical-device offline logging validated on Google Pixel 6 Pro
+### WorkManager behavior
+
+Confirmed implementation:
+
+- network constraint: `NetworkType.CONNECTED`
+- exponential retry backoff
+- unique queue-draining work
+- oldest-first Pending processing
+- application-start recovery
+- scheduling after successful local log persistence
+- partial success is preserved
+- successfully acknowledged events are not rolled back because a later event fails
+
+No Room migration was required for MOB-WP-003. Room database version remains `2`.
+
+### MOB-WP-003 validation
+
+Confirmed automated results:
+
+- JVM unit tests: `52/52 PASS`
+- Android instrumented tests: `21/21 PASS`
+- total automated: `73/73 PASS`
+- Android build: PASS
+
+Confirmed physical-device scenarios:
+
+- offline local event creation -> PASS
+- Pending persistence -> PASS
+- automatic upload after backend/network restoration -> PASS
+- app restart recovery -> PASS
+- idempotent retry using original UUID -> PASS
+- backend row count after retry remained exactly one logical event
+
+A controlled physical `409 Conflict` scenario was not performed. This was optional in the work package and the `409 -> Conflict` behavior is covered by automated tests.
+
+Guard Mobile implementation reference commit:
+
+`ad0788a` — Implement background access log synchronization
 
 ## Approved production access-log design
 
@@ -239,37 +181,7 @@ Approved constraints:
 
 No foreign key to `AVAX_VEHICLES` is approved at this stage.
 
-`receivedAtUtc` must be generated by server/database logic, preferably with UTC database default behavior such as `SYSUTCDATETIME()`.
-
-This approved production table was NOT created during BE-WP-003 because production SQL Server remained under read/discovery-only execution policy.
-
-## Production database findings and safety
-
-The production `AVAX_VEHICLES` audit confirmed:
-
-- no declared `PRIMARY KEY`
-- no `IDENTITY`
-- no declared `FOREIGN KEY`
-- no indexes
-- no `UNIQUE` constraint on `licPlate`
-- no `CHECK` constraints
-- no triggers
-- no SQL Server Change Tracking
-- no `rowversion`, `updatedAt`, or `modifiedAt` synchronization marker
-
-Access-log discovery confirmed:
-
-- `dbo.AccessEntries` is for person access logs and is not suitable for ALPR vehicle events
-- no existing dedicated production vehicle access-log table was identified
-
-During BE-WP-003:
-
-- `AVAX_VEHICLES` production schema modified: NO
-- `dbo.AccessEntries` modified: NO
-- People / CompanyStructures modified: NO
-- production rows modified: NO
-- production DDL applied: NONE
-- development SQLite schema modified: YES
+This approved production table has not yet been deployed by the confirmed implementation work.
 
 ## Open technical debt and follow-up
 
@@ -282,11 +194,11 @@ Existing production technical debt remains open:
 
 Additional follow-up:
 
-- production access-log table deployment is pending
-- production SQL Server access-log persistence adapter/configuration is pending
-- no access-log retention policy is defined
-- automatic access-log deletion is not implemented
-- three existing xUnit analyzer warnings remain in backend test style
+- production access-log table deployment pending
+- production SQL Server access-log persistence adapter/configuration pending
+- no access-log retention policy defined
+- automatic access-log deletion not implemented
+- controlled physical `409 Conflict` mobile validation not performed; automated coverage exists
 
 ## Architecture decision status
 
@@ -296,16 +208,13 @@ Status: `PROPOSED`
 
 `ARCH-001 — Vehicle Identity & Incremental Sync Strategy` remains `TODO / P1` before a future incremental Sync v2.
 
-The dedicated vehicle access-log storage and UUID-based idempotency semantics were explicitly approved by Master for Access Log Contract v1. The Architecture documentation/ADR set should record this as an accepted decision.
+The dedicated vehicle access-log storage and UUID-based idempotency semantics were explicitly accepted by Master for Access Log Contract v1 and should remain represented as an accepted architecture decision in the ADR set.
 
 ## Explicitly not confirmed as implemented
 
 - production SQL Server `dbo.AVAX_ALPR_ACCESS_LOGS` deployment
 - production SQL Server access-log persistence adapter/configuration
-- WorkManager access-log upload
-- automatic background access-log synchronization
-- automatic background vehicle synchronization
-- automatic access-log deletion or retention policy
+- automatic background vehicle snapshot synchronization
 - CameraX
 - plate detector
 - OCR
@@ -314,6 +223,7 @@ The dedicated vehicle access-log storage and UUID-based idempotency semantics we
 - Manager Approve/Deny workflow
 - push notifications
 - Admin Dashboard
+- automatic access-log deletion or retention policy
 - production authentication and authorization
 - production deployment
 
@@ -330,22 +240,7 @@ Guard Mobile:
 - `0d3732f3` — domain access logic and transactional Room cache foundation
 - `4eb09213` — snapshot networking and validated Room synchronization
 - `046fc8ac` — manual offline verification and Android 17 local-network support
-
-## Documentation map
-
-- [Task Board](TASK_BOARD.md)
-- [Roadmap](ROADMAP.md)
-- [Architecture](ARCHITECTURE.md)
-- [ADR register](adr/)
-- [API Contract](API_CONTRACT.md)
-- [Database](DATABASE.md)
-- [Offline Synchronization](OFFLINE_SYNC.md)
-- [Mobile Architecture](MOBILE_ARCHITECTURE.md)
-- [Security](SECURITY.md)
-- [Testing](TESTING.md)
-- [Bugs](BUGS.md)
-- [Technical Debt](TECHNICAL_DEBT.md)
-- [Changelog](CHANGELOG.md)
+- `ad0788a` — background access-log synchronization
 
 ## Governance
 
