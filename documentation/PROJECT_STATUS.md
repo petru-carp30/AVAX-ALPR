@@ -22,19 +22,43 @@ Camera
 
 Camera operation is on-device and does not require backend connectivity. No plate detector, OCR, AI inference, camera image upload, or automatic camera-driven access decision was introduced in CAM-WP-001.
 
-## Next work package
+## Current AI status
 
 `AI-WP-001 — License Plate Detector Baseline & Mobile Export Contract`
 
 - Priority: `P0 Critical`
+- Status: `BLOCKED / DATASET REQUIRED`
+- Target project: AVAX ALPR – AI Model
+- Dependency `CAM-WP-001 — DONE` is satisfied.
+- Blocking dependency: no usable detector dataset is currently available.
+
+AI project discovery reported:
+
+- detector datasets identified: `0`
+- images available: `0`
+- annotations available: `0`
+- plate instances: `0`
+- negative samples: `0`
+- train / validation / test splits: not available
+- existing detector experiments: none
+- existing checkpoints: none
+- existing training scripts: none
+- existing preprocessing implementation: none
+- existing export tooling: none
+- dataset licensing/source documentation: not available
+
+Because no training/evaluation data exists, no Precision, Recall, mAP, confidence threshold, latency, export validation, or model-quality claim is currently possible. AI-WP-001 must remain blocked rather than fabricate results.
+
+### Unblocking work package
+
+`AI-DATA-WP-001 — License Plate Detector Dataset Acquisition & Annotation Foundation`
+
+- Priority: `P0 Critical`
 - Status: `TODO`
 - Target project: AVAX ALPR – AI Model
-- Dependency: `CAM-WP-001 — DONE`
-- Objective: establish the first evaluated license-plate detector baseline and a stable mobile-consumable export contract that can later attach to the confirmed `FrameProcessor` boundary.
+- Objective: define the detector dataset contract, identify legally usable data sources, assemble an initial detector dataset, annotate `license_plate` bounding boxes, create leakage-safe train/validation/test splits, and produce a dataset quality report sufficient to resume AI-WP-001.
 
-This starts Phase 4 of the roadmap: detector, OCR, and on-device AI integration.
-
-The detector must only locate license plates. It must not decide vehicle access.
+AI-WP-001 resumes only after AI-DATA-WP-001 provides sufficient confirmed training/evaluation data.
 
 ## Production persistence follow-up
 
@@ -104,9 +128,7 @@ Confirmed offline-first capabilities include:
 
 ### CameraX foundation
 
-Confirmed CameraX version:
-
-`1.6.1`
+Confirmed CameraX version: `1.6.1`.
 
 Confirmed CameraX components:
 
@@ -116,8 +138,6 @@ Confirmed CameraX components:
 - `ImageAnalysis`
 - `CameraSelector.DEFAULT_BACK_CAMERA`
 
-The preview is integrated with Compose through `AndroidView` and isolated through a dedicated `CameraSession`.
-
 Frame-analysis flow:
 
 ```text
@@ -126,9 +146,7 @@ ImageAnalysis
   -> FrameProcessor
 ```
 
-Current processor:
-
-`DevelopmentFrameProcessor`
+Current processor: `DevelopmentFrameProcessor`.
 
 It provides development frame diagnostics only and performs no AI inference.
 
@@ -164,10 +182,6 @@ Confirmed physical-device validation:
 - manual local verification while offline -> PASS
 - permission-denied/manual fallback -> PASS
 
-Observed development diagnostics included continuous frame counts above 1900 frames, `640x480` analysis resolution, and `90°` rotation on the validated portrait device configuration.
-
-The application is currently effectively single-screen, so a separate in-app navigation screen-switch camera test was not applicable. Equivalent lifecycle leave/return behavior was validated through background/foreground, lock/unlock, and application re-entry.
-
 CameraX implementation reference commit:
 
 `35172b5695577866dc2129895b525f8e4386f267`
@@ -183,9 +197,7 @@ Confirmed mobile synchronization states:
 
 WorkManager uses a connected-network constraint, exponential backoff, unique queue-draining work, oldest-first Pending processing, application-start recovery, and original UUID reuse for idempotent retry.
 
-MOB-WP-003 reference commit:
-
-`ad0788a`
+MOB-WP-003 reference commit: `ad0788a`.
 
 ## Approved production access-log design
 
@@ -208,12 +220,13 @@ Existing production technical debt remains open:
 
 Additional follow-up:
 
+- AI-WP-001 blocked until detector dataset exists
 - production access-log table deployment pending
 - production SQL Server access-log persistence adapter/configuration pending
 - no access-log retention policy defined
 - automatic access-log deletion not implemented
 - controlled physical `409 Conflict` mobile validation not performed; automated coverage exists
-- one pre-existing non-CameraX Kotlin compiler warning remains in `GuardDatabaseMigrations.kt`; it did not block CAM-WP-001
+- one pre-existing non-CameraX Kotlin compiler warning remains in `GuardDatabaseMigrations.kt`
 
 ## Architecture decision status
 
@@ -225,13 +238,11 @@ Status: `PROPOSED`
 
 The dedicated vehicle access-log storage and UUID-based idempotency semantics were explicitly accepted by Master for Access Log Contract v1 and should remain represented as an accepted architecture decision in the ADR set.
 
-The current camera-to-AI integration boundary is implementation evidence only. No detector/OCR model architecture has yet been accepted.
+No detector/OCR model architecture has yet been accepted.
 
 ## Explicitly not confirmed as implemented
 
-- production SQL Server `dbo.AVAX_ALPR_ACCESS_LOGS` deployment
-- production SQL Server access-log persistence adapter/configuration
-- automatic background vehicle snapshot synchronization
+- detector training dataset
 - license plate detector
 - OCR
 - on-device AI inference
@@ -239,6 +250,9 @@ The current camera-to-AI integration boundary is implementation evidence only. N
 - automatic camera-generated access decision
 - automatic camera-generated access logging
 - camera frame persistence/upload
+- production SQL Server `dbo.AVAX_ALPR_ACCESS_LOGS` deployment
+- production SQL Server access-log persistence adapter/configuration
+- automatic background vehicle snapshot synchronization
 - access-request workflow
 - Manager Approve/Deny workflow
 - push notifications
