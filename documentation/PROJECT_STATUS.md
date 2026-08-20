@@ -1,38 +1,40 @@
 # AVAX ALPR Project Status
 
-**Status snapshot:** 2026-08-19  
+**Status snapshot:** 2026-08-20  
 **Source of truth:** AVAX ALPR Master Plan & Current Status
 
 This file is the concise cross-project status snapshot. Detailed planning, architecture, API, database, testing, technical-debt, and changelog information is maintained in the dedicated documentation files.
 
 ## Current milestone
 
-`MOB-WP-003 — Background Access Log Upload` is confirmed `DONE`.
+`CAM-WP-001 — CameraX Foundation` is confirmed `DONE`.
 
-The validated offline-first access-log flow is now:
+Validated camera foundation:
 
 ```text
-Local Access Decision
-  -> Local Access Log persisted in Room
-  -> Pending
-  -> WorkManager
-  -> POST /api/access-logs
-  -> Stored / AlreadyStored
-  -> Synced
+Camera
+  -> CameraX Preview
+  -> ImageAnalysis
+  -> CameraFrameAnalyzer
+  -> FrameProcessor
+  -> future Plate Detector
 ```
 
-The Guard App still performs normal vehicle verification and access logging locally without backend connectivity. Access-log synchronization happens separately in the background when connectivity becomes available.
+Camera operation is on-device and does not require backend connectivity. No plate detector, OCR, AI inference, camera image upload, or automatic camera-driven access decision was introduced in CAM-WP-001.
 
 ## Next work package
 
-`CAM-WP-001 — CameraX Foundation`
+`AI-WP-001 — License Plate Detector Baseline & Mobile Export Contract`
 
 - Priority: `P0 Critical`
 - Status: `TODO`
-- Target project: AVAX ALPR – Guard Mobile App
-- Objective: establish a stable CameraX preview and frame-analysis foundation without introducing detector/OCR logic yet.
+- Target project: AVAX ALPR – AI Model
+- Dependency: `CAM-WP-001 — DONE`
+- Objective: establish the first evaluated license-plate detector baseline and a stable mobile-consumable export contract that can later attach to the confirmed `FrameProcessor` boundary.
 
-This starts Phase 3 of the development roadmap.
+This starts Phase 4 of the roadmap: detector, OCR, and on-device AI integration.
+
+The detector must only locate license plates. It must not decide vehicle access.
 
 ## Production persistence follow-up
 
@@ -41,9 +43,9 @@ This starts Phase 3 of the development roadmap.
 - Priority: `P0 before production`
 - Status: `TODO`
 - Target project: AVAX ALPR – Backend & Database
-- Dependency: approved `dbo.AVAX_ALPR_ACCESS_LOGS` design and BE-WP-003 API contract
+- Dependency: approved `dbo.AVAX_ALPR_ACCESS_LOGS` design and `BE-WP-003 — DONE`
 
-The production access-log table and SQL Server runtime persistence adapter are still not deployed. This does not block CameraX or continued mobile development, but it blocks production central access-log storage.
+The production access-log table and SQL Server runtime persistence adapter are not yet deployed. This does not block AI/mobile development, but it blocks production central access-log storage.
 
 ## Confirmed completed work
 
@@ -60,6 +62,7 @@ The production access-log table and SQL Server runtime persistence adapter are s
 | MOB-WP-002 | Local Access Logging Foundation | P0 | DONE |
 | BE-WP-003 | Access Log Ingestion API v1 | P0 | DONE |
 | MOB-WP-003 | Background Access Log Upload | P0 | DONE |
+| CAM-WP-001 | CameraX Foundation | P0 | DONE |
 
 ## Backend status
 
@@ -70,89 +73,119 @@ Confirmed endpoints:
 - `GET /api/sync/vehicles`
 - `POST /api/access-logs`
 
-Access Log API v1 semantics:
+Access Log API v1 remains idempotent on the mobile-generated UUID:
 
 - new event -> `201 Created`, `Stored`
 - identical retry -> `200 OK`, `AlreadyStored`
-- same UUID with different logical data -> `409 Conflict`
-- mobile `eventTimestampUtc` is preserved
-- `receivedAtUtc` is persistence-controlled
-- `VehicleNotFound` is valid with `sourceVehicleId = NULL`
-- historical decisions are not recalculated or overwritten
+- same UUID with different logical event data -> `409 Conflict`
 
-Backend implementation reference commit:
+Backend reference commit for Access Log API v1:
 
 `88005bf7cd231fc79708f767552499e29fc8da9f`
 
 ## Guard Mobile status
 
-Confirmed offline-first mobile capabilities now include:
+Confirmed offline-first capabilities include:
 
 - Vehicle Snapshot Sync v1 client
 - transactional Room vehicle cache
 - local plate normalization
-- local access verification for Parking Lot, Site, and Camp
+- local ParkingLot / Site / Camp access verification
 - local access logging
-- background access-log synchronization
-- application-start recovery
+- background access-log synchronization with WorkManager
+- application-start synchronization recovery
 - Android 17 Local Network Protection support
+- CameraX rear-camera preview
+- CameraX ImageAnalysis
+- lifecycle-safe camera binding
+- runtime Camera permission handling
+- bounded frame analysis using `STRATEGY_KEEP_ONLY_LATEST`
+- clean `FrameProcessor` boundary for future AI integration
 
-### Access-log synchronization states
+### CameraX foundation
 
-Confirmed states:
+Confirmed CameraX version:
+
+`1.6.1`
+
+Confirmed CameraX components:
+
+- `ProcessCameraProvider`
+- `Preview`
+- `PreviewView`
+- `ImageAnalysis`
+- `CameraSelector.DEFAULT_BACK_CAMERA`
+
+The preview is integrated with Compose through `AndroidView` and isolated through a dedicated `CameraSession`.
+
+Frame-analysis flow:
+
+```text
+ImageAnalysis
+  -> CameraFrameAnalyzer
+  -> FrameProcessor
+```
+
+Current processor:
+
+`DevelopmentFrameProcessor`
+
+It provides development frame diagnostics only and performs no AI inference.
+
+Confirmed analysis properties:
+
+- `ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST`
+- one dedicated single-thread analysis executor per camera session
+- no per-frame executor creation
+- no uncontrolled coroutine creation per frame
+- no required full-frame Bitmap conversion
+- frame width/height/rotation/timestamp/format metadata exposed
+- `ImageProxy.close()` guaranteed through cleanup/finally handling
+- raw camera frames are not retained after processing
+- raw camera frames are not persisted or uploaded
+
+### CAM-WP-001 validation
+
+Confirmed automated validation:
+
+- unit tests: `64/64 PASS`
+- instrumentation tests: `21/21 PASS`
+- total: `85/85 PASS`
+- Android build: PASS
+
+Confirmed physical-device validation:
+
+- Camera permission grant flow -> PASS
+- rear-camera preview -> PASS
+- portrait preview -> PASS
+- continuous ImageAnalysis frame delivery -> PASS
+- background/foreground and lock/unlock lifecycle recovery -> PASS
+- offline camera operation -> PASS
+- manual local verification while offline -> PASS
+- permission-denied/manual fallback -> PASS
+
+Observed development diagnostics included continuous frame counts above 1900 frames, `640x480` analysis resolution, and `90°` rotation on the validated portrait device configuration.
+
+The application is currently effectively single-screen, so a separate in-app navigation screen-switch camera test was not applicable. Equivalent lifecycle leave/return behavior was validated through background/foreground, lock/unlock, and application re-entry.
+
+CameraX implementation reference commit:
+
+`35172b5695577866dc2129895b525f8e4386f267`
+
+## Access-log synchronization status
+
+Confirmed mobile synchronization states:
 
 - `Pending`
 - `Synced`
 - `Conflict`
 - `Rejected`
 
-Semantics:
+WorkManager uses a connected-network constraint, exponential backoff, unique queue-draining work, oldest-first Pending processing, application-start recovery, and original UUID reuse for idempotent retry.
 
-- `Pending` -> eligible for background upload/retry
-- `Synced` -> backend returned `Stored` or `AlreadyStored`
-- `Conflict` -> backend returned `409`; preserved locally and excluded from normal retry
-- `Rejected` -> permanent contract/request rejection; preserved locally and excluded from infinite retry
+MOB-WP-003 reference commit:
 
-Transient failures such as no network, timeout, connection failure, or HTTP 5xx keep the event `Pending`.
-
-### WorkManager behavior
-
-Confirmed implementation:
-
-- network constraint: `NetworkType.CONNECTED`
-- exponential retry backoff
-- unique queue-draining work
-- oldest-first Pending processing
-- application-start recovery
-- scheduling after successful local log persistence
-- partial success is preserved
-- successfully acknowledged events are not rolled back because a later event fails
-
-No Room migration was required for MOB-WP-003. Room database version remains `2`.
-
-### MOB-WP-003 validation
-
-Confirmed automated results:
-
-- JVM unit tests: `52/52 PASS`
-- Android instrumented tests: `21/21 PASS`
-- total automated: `73/73 PASS`
-- Android build: PASS
-
-Confirmed physical-device scenarios:
-
-- offline local event creation -> PASS
-- Pending persistence -> PASS
-- automatic upload after backend/network restoration -> PASS
-- app restart recovery -> PASS
-- idempotent retry using original UUID -> PASS
-- backend row count after retry remained exactly one logical event
-
-A controlled physical `409 Conflict` scenario was not performed. This was optional in the work package and the `409 -> Conflict` behavior is covered by automated tests.
-
-Guard Mobile implementation reference commit:
-
-`ad0788a` — Implement background access log synchronization
+`ad0788a`
 
 ## Approved production access-log design
 
@@ -160,28 +193,9 @@ Master-approved table:
 
 `dbo.AVAX_ALPR_ACCESS_LOGS`
 
-Approved fields:
+The approved design includes database-enforced uniqueness on `mobileEventId`, explicit area/decision CHECK constraints, server-controlled `receivedAtUtc`, and no foreign key to `AVAX_VEHICLES` at this stage.
 
-- `id BIGINT IDENTITY(1,1) NOT NULL`
-- `mobileEventId UNIQUEIDENTIFIER NOT NULL`
-- `eventTimestampUtc DATETIME2(3) NOT NULL`
-- `receivedAtUtc DATETIME2(3) NOT NULL`
-- `licensePlate NVARCHAR(32) NOT NULL`
-- `normalizedPlate NVARCHAR(32) NOT NULL`
-- `sourceVehicleId INT NULL`
-- `accessArea VARCHAR(16) NOT NULL`
-- `accessDecision VARCHAR(24) NOT NULL`
-
-Approved constraints:
-
-- primary key on `id`
-- UNIQUE on `mobileEventId`
-- CHECK for `ParkingLot`, `Site`, `Camp`
-- CHECK for `Granted`, `Denied`, `NotYetValid`, `Expired`, `VehicleNotFound`
-
-No foreign key to `AVAX_VEHICLES` is approved at this stage.
-
-This approved production table has not yet been deployed by the confirmed implementation work.
+The table has not yet been deployed by confirmed production implementation work.
 
 ## Open technical debt and follow-up
 
@@ -199,6 +213,7 @@ Additional follow-up:
 - no access-log retention policy defined
 - automatic access-log deletion not implemented
 - controlled physical `409 Conflict` mobile validation not performed; automated coverage exists
+- one pre-existing non-CameraX Kotlin compiler warning remains in `GuardDatabaseMigrations.kt`; it did not block CAM-WP-001
 
 ## Architecture decision status
 
@@ -210,15 +225,20 @@ Status: `PROPOSED`
 
 The dedicated vehicle access-log storage and UUID-based idempotency semantics were explicitly accepted by Master for Access Log Contract v1 and should remain represented as an accepted architecture decision in the ADR set.
 
+The current camera-to-AI integration boundary is implementation evidence only. No detector/OCR model architecture has yet been accepted.
+
 ## Explicitly not confirmed as implemented
 
 - production SQL Server `dbo.AVAX_ALPR_ACCESS_LOGS` deployment
 - production SQL Server access-log persistence adapter/configuration
 - automatic background vehicle snapshot synchronization
-- CameraX
-- plate detector
+- license plate detector
 - OCR
 - on-device AI inference
+- automatic camera plate lookup
+- automatic camera-generated access decision
+- automatic camera-generated access logging
+- camera frame persistence/upload
 - access-request workflow
 - Manager Approve/Deny workflow
 - push notifications
@@ -241,6 +261,7 @@ Guard Mobile:
 - `4eb09213` — snapshot networking and validated Room synchronization
 - `046fc8ac` — manual offline verification and Android 17 local-network support
 - `ad0788a` — background access-log synchronization
+- `35172b5695577866dc2129895b525f8e4386f267` — CameraX foundation
 
 ## Governance
 
