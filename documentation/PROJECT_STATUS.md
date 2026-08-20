@@ -30,35 +30,89 @@ Camera operation is on-device and does not require backend connectivity. No plat
 - Status: `BLOCKED / DATASET REQUIRED`
 - Target project: AVAX ALPR – AI Model
 - Dependency `CAM-WP-001 — DONE` is satisfied.
-- Blocking dependency: no usable detector dataset is currently available.
+- Blocking dependency: canonical detector dataset is not yet finalized.
 
-AI project discovery reported:
-
-- detector datasets identified: `0`
-- images available: `0`
-- annotations available: `0`
-- plate instances: `0`
-- negative samples: `0`
-- train / validation / test splits: not available
-- existing detector experiments: none
-- existing checkpoints: none
-- existing training scripts: none
-- existing preprocessing implementation: none
-- existing export tooling: none
-- dataset licensing/source documentation: not available
-
-Because no training/evaluation data exists, no Precision, Recall, mAP, confidence threshold, latency, export validation, or model-quality claim is currently possible. AI-WP-001 must remain blocked rather than fabricate results.
-
-### Unblocking work package
-
-`AI-DATA-WP-001 — License Plate Detector Dataset Acquisition & Annotation Foundation`
+### AI-DATA-WP-001 — License Plate Detector Dataset Acquisition & Annotation Foundation
 
 - Priority: `P0 Critical`
-- Status: `TODO`
+- Status: `IN PROGRESS`
 - Target project: AVAX ALPR – AI Model
-- Objective: define the detector dataset contract, identify legally usable data sources, assemble an initial detector dataset, annotate `license_plate` bounding boxes, create leakage-safe train/validation/test splits, and produce a dataset quality report sufficient to resume AI-WP-001.
 
-AI-WP-001 resumes only after AI-DATA-WP-001 provides sufficient confirmed training/evaluation data.
+Confirmed audit progress:
+
+#### Romanian public license-plate dataset
+
+- 534 images
+- 652 license-plate instances
+- 0 corrupt images
+- 0 invalid annotations
+- 0 invalid bounding boxes
+- Pascal VOC annotations
+- target-domain relevant for Romania / Europe
+- source data originates from only 4 video sequences
+- all 4 source sequences appear in both the original train and validation split
+- original source split is therefore not suitable for AVAX evaluation because of sequence leakage
+- raw dataset remains untouched
+
+The upstream repository license is confirmed MIT and is documented in `THIRD_PARTY_NOTICES.md`.
+
+#### Kaggle `plate-license-recognition-dataset`
+
+- 4039 total images
+- 1539 images contain a `LicensePlate` bounding box
+- 2224 `LicensePlate` instances
+- 291 multi-plate images
+- the other 2500 images are primarily character/OCR samples and must not be treated as detector negatives
+- 909 detector source groups identified
+- 384 source groups contain multiple image variants
+- all 384 multi-variant groups contain different pixels
+- 271 groups contain differing `LicensePlate` annotations between variants
+- original source split has source-group leakage across train/validation/test
+- useful real-world detector samples exist, but mosaic/collage-style samples are also present
+- current classification: supplemental training source after filtering; not suitable as-is for AVAX validation/test
+- raw dataset remains untouched
+
+### Master dataset acquisition decision
+
+Master decision: **Acquire and audit both remaining candidates before freezing the canonical AVAX detector dataset.**
+
+Acquisition order and role:
+
+1. **Open-Images-derived Kaggle detector dataset** — acquire/audit as the next real-world detector-only source, subject to provenance and licensing verification.
+2. **European License Plate Dataset (ELPD)** — acquire/audit as a supplemental European synthetic training source.
+
+Important licensing rule for the Open-Images-derived source:
+
+- do not rely solely on a Kaggle uploader-level `CC0` label;
+- Open Images annotations are published under CC BY 4.0;
+- Open Images source images are listed as CC BY 2.0, but Open Images itself states that image-level license status should be verified;
+- retain or reconstruct upstream image identifiers/metadata/attribution where possible before accepting samples into the AVAX canonical dataset.
+
+ELPD role:
+
+- synthetic European data may be used for training diversity;
+- it must not become the primary AVAX validation/test benchmark;
+- difficult/far/blurred/partially occluded plates may be unannotated according to the dataset description, so this bias must be preserved in the quality report.
+
+### Canonical dataset rules
+
+The final AVAX-derived detector dataset must:
+
+- use semantic class `license_plate`;
+- leave all raw source datasets untouched;
+- normalize annotations deterministically;
+- preserve source/provenance information;
+- preserve dataset licensing/attribution requirements;
+- assign related sequences/source groups to a single split;
+- prevent source-group leakage;
+- use realistic full-vehicle real images for validation/test wherever possible;
+- use synthetic ELPD data for training augmentation rather than as the primary benchmark;
+- filter or isolate mosaic/collage-style samples from the existing Kaggle source;
+- not treat OCR/character crops as detector negatives.
+
+Dataset acquisition should stop after the two selected candidate audits if sufficient clean, legally usable, real detector data exists to construct a credible leakage-safe train/validation/test foundation. Additional public-source hunting is not required unless one of these candidates fails licensing/provenance/quality requirements or the resulting real validation/test pool remains inadequate.
+
+AI-WP-001 training remains blocked until AI-DATA-WP-001 returns a canonical dataset handoff ready for detector training.
 
 ## Production persistence follow-up
 
@@ -220,7 +274,9 @@ Existing production technical debt remains open:
 
 Additional follow-up:
 
-- AI-WP-001 blocked until detector dataset exists
+- AI-WP-001 remains blocked until AI-DATA-WP-001 completes
+- Open-Images-derived candidate requires image-level provenance/license audit
+- ELPD requires attribution if selected into the canonical training set
 - production access-log table deployment pending
 - production SQL Server access-log persistence adapter/configuration pending
 - no access-log retention policy defined
@@ -242,7 +298,7 @@ No detector/OCR model architecture has yet been accepted.
 
 ## Explicitly not confirmed as implemented
 
-- detector training dataset
+- canonical detector training dataset
 - license plate detector
 - OCR
 - on-device AI inference
