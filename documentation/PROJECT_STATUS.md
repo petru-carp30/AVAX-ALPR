@@ -1,129 +1,256 @@
 # AVAX ALPR Project Status
 
-**Status snapshot:** 2026-08-20  
+**Status snapshot:** 2026-08-24  
 **Source of truth:** AVAX ALPR Master Plan & Current Status
 
-This file is the concise cross-project status snapshot. Detailed planning, architecture, API, database, testing, technical-debt, and changelog information is maintained in the dedicated documentation files.
+This file is the concise cross-project status snapshot. Detailed planning, architecture, API, database, testing, technical-debt, licensing, and changelog information is maintained in the dedicated documentation files.
 
 ## Current milestone
 
-`CAM-WP-001 — CameraX Foundation` is confirmed `DONE`.
-
-Validated camera foundation:
-
-```text
-Camera
-  -> CameraX Preview
-  -> ImageAnalysis
-  -> CameraFrameAnalyzer
-  -> FrameProcessor
-  -> future Plate Detector
-```
-
-Camera operation is on-device and does not require backend connectivity. No plate detector, OCR, AI inference, camera image upload, or automatic camera-driven access decision was introduced in CAM-WP-001.
-
-## Current AI status
-
-`AI-WP-001 — License Plate Detector Baseline & Mobile Export Contract`
-
-- Priority: `P0 Critical`
-- Status: `BLOCKED / DATASET REQUIRED`
-- Target project: AVAX ALPR – AI Model
-- Dependency `CAM-WP-001 — DONE` is satisfied.
-- Blocking dependency: canonical detector dataset is not yet finalized.
-
-### AI-DATA-WP-001 — License Plate Detector Dataset Acquisition & Annotation Foundation
+`AI-DATA-WP-001 — License Plate Detector Dataset Acquisition & Annotation Foundation`
 
 - Priority: `P0 Critical`
 - Status: `IN PROGRESS`
 - Target project: AVAX ALPR – AI Model
 
-Confirmed audit progress:
+`AI-WP-001 — License Plate Detector Baseline & Mobile Export Contract` remains `BLOCKED / DATASET REQUIRED` until the canonical detector dataset is constructed and accepted.
 
-#### Romanian public license-plate dataset
+## Master-approved detector dataset direction
+
+The canonical AVAX detector dataset will be built from four audited sources with distinct roles.
+
+### 1. Romanian public license-plate dataset
+
+Role: **PRIMARY ROMANIAN / EU REAL-DOMAIN SOURCE**
+
+Confirmed audit:
 
 - 534 images
 - 652 license-plate instances
+- Pascal VOC
 - 0 corrupt images
 - 0 invalid annotations
 - 0 invalid bounding boxes
-- Pascal VOC annotations
-- target-domain relevant for Romania / Europe
-- source data originates from only 4 video sequences
-- all 4 source sequences appear in both the original train and validation split
-- original source split is therefore not suitable for AVAX evaluation because of sequence leakage
-- raw dataset remains untouched
+- only 4 source video sequences
+- all 4 sequences leak across the upstream train/validation split
 
-The upstream repository license is confirmed MIT and is documented in `THIRD_PARTY_NOTICES.md`.
+Master decision:
 
-#### Kaggle `plate-license-recognition-dataset`
+- ACCEPT
+- raw data remains untouched
+- upstream split must not be reused for AVAX evaluation
+- sequence identity must be preserved
+- every sequence must belong to exactly one AVAX split
+- MIT attribution/license preservation remains required and is documented in `THIRD_PARTY_NOTICES.md`
 
-- 4039 total images
-- 1539 images contain a `LicensePlate` bounding box
-- 2224 `LicensePlate` instances
+### 2. Existing Kaggle `plate-license-recognition-dataset`
+
+Role: **FILTERED SUPPLEMENTAL REAL TRAINING SOURCE**
+
+Confirmed detector subset:
+
+- 1539 detector images
+- 2224 license-plate instances
 - 291 multi-plate images
-- the other 2500 images are primarily character/OCR samples and must not be treated as detector negatives
-- 909 detector source groups identified
-- 384 source groups contain multiple image variants
-- all 384 multi-variant groups contain different pixels
-- 271 groups contain differing `LicensePlate` annotations between variants
-- original source split has source-group leakage across train/validation/test
-- useful real-world detector samples exist, but mosaic/collage-style samples are also present
-- current classification: supplemental training source after filtering; not suitable as-is for AVAX validation/test
-- raw dataset remains untouched
+- 909 detector source groups
+- 384 source groups with multiple image variants
+- 271 multi-variant groups with annotation disagreement
+- original split has source-group leakage
+- significant mosaic/collage-style content exists
+- approximately 2500 non-detector samples are primarily OCR/character content and must not be treated as detector negatives
 
-### Master dataset acquisition decision
+Master decision:
 
-Master decision: **Acquire and audit both remaining candidates before freezing the canonical AVAX detector dataset.**
+- ACCEPT FOR TRAINING AFTER FILTERING
+- TRAIN only for the first canonical baseline
+- preserve source-group identity
+- all variants from one source group stay in one split
+- exclude/isolate mosaic/collage samples
+- exclude OCR/character crops from detector-negative logic
+- do not reuse upstream train/validation/test
 
-Acquisition order and role:
+### 3. Open-Images-derived Kaggle detector dataset
 
-1. **Open-Images-derived Kaggle detector dataset** — acquire/audit as the next real-world detector-only source, subject to provenance and licensing verification.
-2. **European License Plate Dataset (ELPD)** — acquire/audit as a supplemental European synthetic training source.
+Role: **ADDITIONAL REAL-WORLD DETECTOR SOURCE**
 
-Important licensing rule for the Open-Images-derived source:
+Confirmed audit:
 
-- do not rely solely on a Kaggle uploader-level `CC0` label;
-- Open Images annotations are published under CC BY 4.0;
-- Open Images source images are listed as CC BY 2.0, but Open Images itself states that image-level license status should be verified;
-- retain or reconstruct upstream image identifiers/metadata/attribution where possible before accepting samples into the AVAX canonical dataset.
+- 5368 images
+- 7852 plate instances
+- 1609 multi-plate images
+- 0 corrupt images
+- 0 missing labels
+- 0 orphan labels
+- 0 exact duplicate groups
+- 0 identical local train/validation ImageIDs
+- all 5368 filenames preserve valid Open Images ImageIDs
+- 192 boxes have tiny boundary overshoot only; maximum observed normalized overshoot approximately 0.002252
+- all 5368 local ImageIDs matched official Open Images metadata
+- all local samples originate from the upstream Open Images train pool
+- image-level provenance metadata is available for every image
+- image-level license metadata is CC BY 2.0 for all audited images
+- Kaggle-local train/validation is not the upstream Open Images split
 
-ELPD role:
+Master decision:
 
-- synthetic European data may be used for training diversity;
-- it must not become the primary AVAX validation/test benchmark;
-- difficult/far/blurred/partially occluded plates may be unannotated according to the dataset description, so this bias must be preserved in the quality report.
+- ACCEPT
+- eligible for TRAIN
+- eligible for VALIDATION after canonical filtering/group rules
+- eligible for TEST after canonical filtering/group rules
+- validation/test should prioritize realistic full-vehicle/full-scene images rather than heavily cropped plate scenes
+- preserve per-image provenance/attribution metadata
+- Kaggle uploader-level CC0 must not replace upstream image-level licensing information
+- raw labels remain untouched
+- tiny boundary overshoot may be deterministically clipped only in derived canonical annotations
 
-### Canonical dataset rules
+Before final canonical splitting, run near-duplicate/similarity grouping sufficient to prevent visually equivalent frames from crossing splits.
 
-The final AVAX-derived detector dataset must:
+### 4. European License Plate Dataset — ELPD
 
-- use semantic class `license_plate`;
-- leave all raw source datasets untouched;
-- normalize annotations deterministically;
-- preserve source/provenance information;
-- preserve dataset licensing/attribution requirements;
-- assign related sequences/source groups to a single split;
-- prevent source-group leakage;
-- use realistic full-vehicle real images for validation/test wherever possible;
-- use synthetic ELPD data for training augmentation rather than as the primary benchmark;
-- filter or isolate mosaic/collage-style samples from the existing Kaggle source;
-- not treat OCR/character crops as detector negatives.
+Role: **SYNTHETIC EUROPEAN SUPPLEMENTAL TRAINING SOURCE**
 
-Dataset acquisition should stop after the two selected candidate audits if sufficient clean, legally usable, real detector data exists to construct a credible leakage-safe train/validation/test foundation. Additional public-source hunting is not required unless one of these candidates fails licensing/provenance/quality requirements or the resulting real validation/test pool remains inadequate.
+Confirmed audit:
 
-AI-WP-001 training remains blocked until AI-DATA-WP-001 returns a canonical dataset handoff ready for detector training.
+- 2329 raw images
+- 2948 annotated plate instances
+- 628 multi-object images
+- 4 corrupt source images
+- 2325 usable images after corrupt exclusion
+- 2286 usable positive images
+- 2947 usable annotated plate instances
+- 39 usable empty-annotation images contain visible unannotated plates and are therefore not valid detector negatives
+- synthetic European-like road scenes with varied weather, distance, traffic, night, glare, and some trucks
+- CC BY 4.0
 
-## Production persistence follow-up
+Master decision:
 
-`BE-WP-004 — SQL Server Access Log Persistence & Controlled Deployment`
+- ACCEPT — TRAIN-ONLY
+- exclude the 4 corrupt source samples from derived AVAX data
+- exclude the 39 incomplete empty-label samples unless they are later manually re-annotated
+- do not repair or modify raw source data
+- do not use ELPD for primary AVAX validation/test metrics
+- preserve source attribution, license reference, and derivative/modification notice where applicable
+- keep samples explicitly marked as synthetic in provenance metadata
 
-- Priority: `P0 before production`
-- Status: `TODO`
-- Target project: AVAX ALPR – Backend & Database
-- Dependency: approved `dbo.AVAX_ALPR_ACCESS_LOGS` design and `BE-WP-003 — DONE`
+## Canonical dataset composition decision
 
-The production access-log table and SQL Server runtime persistence adapter are not yet deployed. This does not block AI/mobile development, but it blocks production central access-log storage.
+Approved first-baseline composition strategy:
+
+### Training
+
+REAL sources:
+
+- sequence-safe Romanian data assigned to training
+- Open-Images-derived real detector data
+- filtered clean samples from the existing Kaggle detector subset
+
+SYNTHETIC source:
+
+- ELPD usable positive samples only
+
+Initial sampling rule:
+
+- target at least 75% REAL samples
+- cap synthetic ELPD contribution at approximately 25% of detector training samples for the first baseline
+
+This is a first-baseline sampling policy, not a permanent architecture constraint. It may be revised later from measured detector error analysis.
+
+### Validation
+
+Primary validation must be REAL.
+
+Eligible:
+
+- sequence-safe Romanian real data
+- filtered realistic Open Images scenes
+
+Exclude from primary validation:
+
+- ELPD
+- mosaic/collage samples
+- OCR/character crops
+- source-leaking variants
+
+### Test
+
+Primary test benchmark should be 100% REAL where practical.
+
+Priority:
+
+1. sequence-held-out Romanian/EU real samples
+2. realistic full-vehicle/full-scene Open Images samples
+
+No train source group / video sequence / near-duplicate group may appear in the primary test set.
+
+ELPD must not contribute to the primary AVAX test metric.
+
+## Detector-negative strategy — Master decision
+
+The current positive datasets do not provide a trustworthy real detector-negative pool.
+
+Master decision: **curate a dedicated real negative subset from provenance-safe Open Images data.**
+
+This is not a search for another license-plate dataset. It is a targeted negative-frame collection task.
+
+Required negative categories should include, where available:
+
+- vehicles with no visible plate
+- partial vehicles / vehicle fragments
+- empty road and gate-like scenes
+- people
+- construction machinery / heavy equipment
+- signs and text-like objects
+- barriers / fences / gate infrastructure
+- background scenes likely to create plate-like false positives
+
+Negative acceptance rule:
+
+- an image is a detector negative only if no license plate is visibly present after audit
+- absence of a `Vehicle registration plate` annotation alone is not sufficient proof of a true negative
+- source ImageID and per-image provenance/license metadata must be retained
+- raw Open Images data must remain untouched
+
+Initial negative-pool target:
+
+- curate approximately 500–1000 audited REAL negatives for the first baseline
+- prefer diversity over volume
+- do not exceed this range merely to increase dataset size before first model error analysis
+
+After the first detector baseline, false-positive analysis may justify expanding or rebalancing the negative pool.
+
+## AVAX field-domain limitation
+
+Construction-site, heavy-equipment, security-gate, muddy-site, and fixed gate-camera representation is currently limited.
+
+Master decision:
+
+- this does NOT block the first public-data detector baseline
+- it must be documented as an explicit domain limitation
+- do not acquire/use private AVAX field imagery without explicit authorization
+- create a later dedicated domain-adaptation / field-validation work package before production detector sign-off if authorized field data becomes available
+
+Proposed future follow-up:
+
+`AI-DATA-WP-002 — AVAX Field Domain Adaptation & Validation Dataset`
+
+- Status: `PROPOSED`
+- Priority: `P1 High before production AI sign-off`
+- Not a dependency for the first AI-WP-001 baseline
+
+## Immediate next execution
+
+AI-DATA-WP-001 should now:
+
+1. curate and audit the real Open Images negative pool;
+2. normalize all accepted source annotations into one derived canonical detector format;
+3. preserve per-sample source, provenance, synthetic/real flag, and source-group/sequence identity;
+4. perform near-duplicate/group analysis before splitting;
+5. construct leakage-safe canonical train/validation/test splits under the approved source-role rules;
+6. produce factual final split counts and real/synthetic/negative composition;
+7. validate the derived dataset without modifying raw sources;
+8. return `MASTER HANDOFF — AI-DATA-WP-001` for acceptance.
+
+Do NOT begin detector training until Master accepts the final canonical dataset handoff.
 
 ## Confirmed completed work
 
@@ -134,7 +261,6 @@ The production access-log table and SQL Server runtime persistence adapter are n
 | BE-002 | Validate Existing SQL Schema Relevant to ALPR | P0 | DONE |
 | DEVDB-001 | Local SQLite Development Database Baseline | P1 | DONE |
 | BE-WP-001 | Local Backend Vehicle Read API Foundation | P0 | DONE |
-| BE-003 through BE-009 | BE-WP-001 implementation subtasks | P0 | DONE |
 | BE-WP-002 | Vehicle Snapshot Sync API v1 | P0 | DONE |
 | MOB-WP-001 | Offline Vehicle Cache & Manual Access Verification | P0 | DONE |
 | MOB-WP-002 | Local Access Logging Foundation | P0 | DONE |
@@ -142,196 +268,58 @@ The production access-log table and SQL Server runtime persistence adapter are n
 | MOB-WP-003 | Background Access Log Upload | P0 | DONE |
 | CAM-WP-001 | CameraX Foundation | P0 | DONE |
 
-## Backend status
+## Backend / production follow-up
 
-Confirmed endpoints:
+`BE-WP-004 — SQL Server Access Log Persistence & Controlled Deployment`
 
-- `GET /api/vehicles`
-- `GET /api/vehicles/by-plate/{plate}`
-- `GET /api/sync/vehicles`
-- `POST /api/access-logs`
+- Priority: `P0 before production`
+- Status: `TODO`
 
-Access Log API v1 remains idempotent on the mobile-generated UUID:
-
-- new event -> `201 Created`, `Stored`
-- identical retry -> `200 OK`, `AlreadyStored`
-- same UUID with different logical event data -> `409 Conflict`
-
-Backend reference commit for Access Log API v1:
-
-`88005bf7cd231fc79708f767552499e29fc8da9f`
+Production `dbo.AVAX_ALPR_ACCESS_LOGS` deployment and the production SQL Server persistence adapter are not yet confirmed implemented.
 
 ## Guard Mobile status
 
-Confirmed offline-first capabilities include:
+Confirmed mobile foundation includes:
 
-- Vehicle Snapshot Sync v1 client
-- transactional Room vehicle cache
-- local plate normalization
-- local ParkingLot / Site / Camp access verification
+- offline Room vehicle cache
+- local access verification
 - local access logging
-- background access-log synchronization with WorkManager
-- application-start synchronization recovery
-- Android 17 Local Network Protection support
+- background access-log upload
 - CameraX rear-camera preview
-- CameraX ImageAnalysis
+- ImageAnalysis with bounded backpressure
 - lifecycle-safe camera binding
-- runtime Camera permission handling
-- bounded frame analysis using `STRATEGY_KEEP_ONLY_LATEST`
-- clean `FrameProcessor` boundary for future AI integration
+- clean `FrameProcessor` boundary for future on-device AI
 
-### CameraX foundation
+No detector or OCR integration is yet confirmed implemented.
 
-Confirmed CameraX version: `1.6.1`.
-
-Confirmed CameraX components:
-
-- `ProcessCameraProvider`
-- `Preview`
-- `PreviewView`
-- `ImageAnalysis`
-- `CameraSelector.DEFAULT_BACK_CAMERA`
-
-Frame-analysis flow:
-
-```text
-ImageAnalysis
-  -> CameraFrameAnalyzer
-  -> FrameProcessor
-```
-
-Current processor: `DevelopmentFrameProcessor`.
-
-It provides development frame diagnostics only and performs no AI inference.
-
-Confirmed analysis properties:
-
-- `ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST`
-- one dedicated single-thread analysis executor per camera session
-- no per-frame executor creation
-- no uncontrolled coroutine creation per frame
-- no required full-frame Bitmap conversion
-- frame width/height/rotation/timestamp/format metadata exposed
-- `ImageProxy.close()` guaranteed through cleanup/finally handling
-- raw camera frames are not retained after processing
-- raw camera frames are not persisted or uploaded
-
-### CAM-WP-001 validation
-
-Confirmed automated validation:
-
-- unit tests: `64/64 PASS`
-- instrumentation tests: `21/21 PASS`
-- total: `85/85 PASS`
-- Android build: PASS
-
-Confirmed physical-device validation:
-
-- Camera permission grant flow -> PASS
-- rear-camera preview -> PASS
-- portrait preview -> PASS
-- continuous ImageAnalysis frame delivery -> PASS
-- background/foreground and lock/unlock lifecycle recovery -> PASS
-- offline camera operation -> PASS
-- manual local verification while offline -> PASS
-- permission-denied/manual fallback -> PASS
-
-CameraX implementation reference commit:
-
-`35172b5695577866dc2129895b525f8e4386f267`
-
-## Access-log synchronization status
-
-Confirmed mobile synchronization states:
-
-- `Pending`
-- `Synced`
-- `Conflict`
-- `Rejected`
-
-WorkManager uses a connected-network constraint, exponential backoff, unique queue-draining work, oldest-first Pending processing, application-start recovery, and original UUID reuse for idempotent retry.
-
-MOB-WP-003 reference commit: `ad0788a`.
-
-## Approved production access-log design
-
-Master-approved table:
-
-`dbo.AVAX_ALPR_ACCESS_LOGS`
-
-The approved design includes database-enforced uniqueness on `mobileEventId`, explicit area/decision CHECK constraints, server-controlled `receivedAtUtc`, and no foreign key to `AVAX_VEHICLES` at this stage.
-
-The table has not yet been deployed by confirmed production implementation work.
-
-## Open technical debt and follow-up
-
-Existing production technical debt remains open:
+## Open technical debt / limitations
 
 - `TD-001` — `AVAX_VEHICLES` lacks enforced primary identity
 - `TD-002` — license plate uniqueness is not enforced
 - `TD-003` — no incremental synchronization marker
 - `TD-004` — no vehicle lookup index in production
-
-Additional follow-up:
-
-- AI-WP-001 remains blocked until AI-DATA-WP-001 completes
-- Open-Images-derived candidate requires image-level provenance/license audit
-- ELPD requires attribution if selected into the canonical training set
-- production access-log table deployment pending
-- production SQL Server access-log persistence adapter/configuration pending
+- production access-log persistence deployment pending
 - no access-log retention policy defined
-- automatic access-log deletion not implemented
-- controlled physical `409 Conflict` mobile validation not performed; automated coverage exists
-- one pre-existing non-CameraX Kotlin compiler warning remains in `GuardDatabaseMigrations.kt`
-
-## Architecture decision status
-
-`ADR-001 — Vehicle Synchronization Strategy: Full Snapshot for Sync Contract v1`
-
-Status: `PROPOSED`
-
-`ARCH-001 — Vehicle Identity & Incremental Sync Strategy` remains `TODO / P1` before a future incremental Sync v2.
-
-The dedicated vehicle access-log storage and UUID-based idempotency semantics were explicitly accepted by Master for Access Log Contract v1 and should remain represented as an accepted architecture decision in the ADR set.
-
-No detector/OCR model architecture has yet been accepted.
+- canonical detector dataset not yet finalized
+- AVAX field-domain detector data is limited
 
 ## Explicitly not confirmed as implemented
 
-- canonical detector training dataset
-- license plate detector
+- final canonical detector dataset
+- detector training
+- trained license-plate detector
 - OCR
-- on-device AI inference
+- ONNX/TFLite mobile detector runtime integration
 - automatic camera plate lookup
 - automatic camera-generated access decision
 - automatic camera-generated access logging
-- camera frame persistence/upload
-- production SQL Server `dbo.AVAX_ALPR_ACCESS_LOGS` deployment
-- production SQL Server access-log persistence adapter/configuration
-- automatic background vehicle snapshot synchronization
-- access-request workflow
+- AVAX field-domain adaptation dataset
+- production SQL Server access-log persistence
 - Manager Approve/Deny workflow
 - push notifications
 - Admin Dashboard
-- automatic access-log deletion or retention policy
-- production authentication and authorization
+- production authentication/authorization
 - production deployment
-
-## Reference commits
-
-Backend:
-
-- `6b9e61e` — Microsoft.OpenApi security remediation
-- `861ab991` — Vehicle Snapshot Sync API v1
-- `88005bf7cd231fc79708f767552499e29fc8da9f` — Access Log Ingestion API v1
-
-Guard Mobile:
-
-- `0d3732f3` — domain access logic and transactional Room cache foundation
-- `4eb09213` — snapshot networking and validated Room synchronization
-- `046fc8ac` — manual offline verification and Android 17 local-network support
-- `ad0788a` — background access-log synchronization
-- `35172b5695577866dc2129895b525f8e4386f267` — CameraX foundation
 
 ## Governance
 
