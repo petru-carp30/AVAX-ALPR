@@ -1,256 +1,310 @@
 # AVAX ALPR Project Status
 
-**Status snapshot:** 2026-08-24  
+**Status snapshot:** 2026-08-31  
 **Source of truth:** AVAX ALPR Master Plan & Current Status
 
 This file is the concise cross-project status snapshot. Detailed planning, architecture, API, database, testing, technical-debt, licensing, and changelog information is maintained in the dedicated documentation files.
 
-## Current milestone
+## Current AI milestone
 
 `AI-DATA-WP-001 — License Plate Detector Dataset Acquisition & Annotation Foundation`
 
 - Priority: `P0 Critical`
-- Status: `IN PROGRESS`
+- Status: `DONE`
 - Target project: AVAX ALPR – AI Model
 
-`AI-WP-001 — License Plate Detector Baseline & Mobile Export Contract` remains `BLOCKED / DATASET REQUIRED` until the canonical detector dataset is constructed and accepted.
+Master accepted the materialized canonical detector dataset baseline:
 
-## Master-approved detector dataset direction
+`AI/PlateDetector/datasets/derived/baseline_v1`
 
-The canonical AVAX detector dataset will be built from four audited sources with distinct roles.
+The dataset foundation is accepted for the first detector baseline.
 
-### 1. Romanian public license-plate dataset
+**READY TO RESUME AI-WP-001**
+
+`AI-WP-001 — License Plate Detector Baseline & Mobile Export Contract`
+
+- Priority: `P0 Critical`
+- Status: `TODO / READY TO RESUME`
+- Target project: AVAX ALPR – AI Model
+- Dataset blocker: CLEARED
+
+Detector training may now begin against the accepted `baseline_v1` dataset. Model architecture/runtime/export choices that were previously only `PROPOSED` remain to be validated by AI-WP-001 and are not automatically accepted by this dataset decision.
+
+## Accepted canonical detector dataset — baseline_v1
+
+Materialized baseline:
+
+- total images: `8916`
+- positive images: `8412`
+- real audited negatives: `504`
+- license-plate instances: `11580`
+
+Splits:
+
+- TRAIN: `7622`
+- VAL: `625`
+- TEST: `669`
+
+Validation confirmed:
+
+- image/label pairing complete
+- YOLO normalized XYWH labels valid
+- negative label files empty
+- excluded samples not materialized
+- raw source datasets unchanged
+- source-group leakage: `0`
+- exact decoded-pixel leakage: `0`
+- unresolved near-duplicate candidate pairs: `0`
+- TRAIN_ONLY samples outside TRAIN: `0`
+- synthetic samples in VAL: `0`
+- synthetic samples in TEST: `0`
+
+## Training composition
+
+TRAIN composition:
+
+- REAL: `5717`
+- SYNTHETIC: `1905`
+- synthetic ratio: `24.9934%`
+
+First-baseline policy result:
+
+- REAL >= 75%: PASS
+- SYNTHETIC <= 25%: PASS
+
+VAL and TEST contain real samples only.
+
+## Accepted source composition
+
+### Romanian public license-plate dataset
 
 Role: **PRIMARY ROMANIAN / EU REAL-DOMAIN SOURCE**
 
-Confirmed audit:
+Raw:
 
 - 534 images
-- 652 license-plate instances
-- Pascal VOC
-- 0 corrupt images
-- 0 invalid annotations
-- 0 invalid bounding boxes
-- only 4 source video sequences
-- all 4 sequences leak across the upstream train/validation split
+- 652 plate instances
 
-Master decision:
+Excluded:
 
-- ACCEPT
-- raw data remains untouched
-- upstream split must not be reused for AVAX evaluation
-- sequence identity must be preserved
-- every sequence must belong to exactly one AVAX split
-- MIT attribution/license preservation remains required and is documented in `THIRD_PARTY_NOTICES.md`
+- 2 all-black duplicate/conflicting frames
 
-### 2. Existing Kaggle `plate-license-recognition-dataset`
+Final eligible:
 
-Role: **FILTERED SUPPLEMENTAL REAL TRAINING SOURCE**
+- 532 images
+- 649 plate instances
 
-Confirmed detector subset:
+Canonical sequence assignment:
 
-- 1539 detector images
-- 2224 license-plate instances
-- 291 multi-plate images
-- 909 detector source groups
-- 384 source groups with multiple image variants
-- 271 multi-variant groups with annotation disagreement
-- original split has source-group leakage
-- significant mosaic/collage-style content exists
-- approximately 2500 non-detector samples are primarily OCR/character content and must not be treated as detector negatives
+- `dayride_type1_001.mp4` -> TRAIN: 384 images
+- `dayride_type1_003.mp4` -> TRAIN: 28 images
+- `dayride_type1_002.mp4` -> VAL: 38 images
+- `nightride_type3_001.mp4` -> TEST: 82 images
 
-Master decision:
+No Romanian source sequence crosses AVAX splits.
 
-- ACCEPT FOR TRAINING AFTER FILTERING
-- TRAIN only for the first canonical baseline
-- preserve source-group identity
-- all variants from one source group stay in one split
-- exclude/isolate mosaic/collage samples
-- exclude OCR/character crops from detector-negative logic
-- do not reuse upstream train/validation/test
-
-### 3. Open-Images-derived Kaggle detector dataset
+### Open Images derived detector source
 
 Role: **ADDITIONAL REAL-WORLD DETECTOR SOURCE**
 
-Confirmed audit:
+Included:
 
 - 5368 images
 - 7852 plate instances
-- 1609 multi-plate images
-- 0 corrupt images
-- 0 missing labels
-- 0 orphan labels
-- 0 exact duplicate groups
-- 0 identical local train/validation ImageIDs
-- all 5368 filenames preserve valid Open Images ImageIDs
-- 192 boxes have tiny boundary overshoot only; maximum observed normalized overshoot approximately 0.002252
-- all 5368 local ImageIDs matched official Open Images metadata
-- all local samples originate from the upstream Open Images train pool
-- image-level provenance metadata is available for every image
-- image-level license metadata is CC BY 2.0 for all audited images
-- Kaggle-local train/validation is not the upstream Open Images split
 
-Master decision:
+Canonical split:
 
-- ACCEPT
-- eligible for TRAIN
-- eligible for VALIDATION after canonical filtering/group rules
-- eligible for TEST after canonical filtering/group rules
-- validation/test should prioritize realistic full-vehicle/full-scene images rather than heavily cropped plate scenes
-- preserve per-image provenance/attribution metadata
-- Kaggle uploader-level CC0 must not replace upstream image-level licensing information
-- raw labels remain untouched
-- tiny boundary overshoot may be deterministically clipped only in derived canonical annotations
+- TRAIN: 4294 images / 6224 instances
+- VAL: 537 images / 812 instances
+- TEST: 537 images / 816 instances
 
-Before final canonical splitting, run near-duplicate/similarity grouping sufficient to prevent visually equivalent frames from crossing splits.
+All audited ImageIDs retain upstream provenance metadata including license, original URLs, author and author-profile fields.
 
-### 4. European License Plate Dataset — ELPD
+The Kaggle wrapper license is not used to replace upstream image-level attribution.
 
-Role: **SYNTHETIC EUROPEAN SUPPLEMENTAL TRAINING SOURCE**
+192 tiny source bounding-box overshoots are corrected only in derived canonical annotations through deterministic clipping to valid normalized bounds. Raw labels remain untouched.
 
-Confirmed audit:
+### Kaggle `plate_license_recognition`
 
-- 2329 raw images
-- 2948 annotated plate instances
-- 628 multi-object images
-- 4 corrupt source images
-- 2325 usable images after corrupt exclusion
-- 2286 usable positive images
-- 2947 usable annotated plate instances
-- 39 usable empty-annotation images contain visible unannotated plates and are therefore not valid detector negatives
-- synthetic European-like road scenes with varied weather, distance, traffic, night, glare, and some trucks
-- CC BY 4.0
+Role: **FILTERED SUPPLEMENTAL REAL TRAIN-ONLY SOURCE**
 
-Master decision:
+Raw detector-positive candidates:
 
-- ACCEPT — TRAIN-ONLY
-- exclude the 4 corrupt source samples from derived AVAX data
-- exclude the 39 incomplete empty-label samples unless they are later manually re-annotated
-- do not repair or modify raw source data
-- do not use ELPD for primary AVAX validation/test metrics
-- preserve source attribution, license reference, and derivative/modification notice where applicable
-- keep samples explicitly marked as synthetic in provenance metadata
+- 1539 images
+- 2224 instances
+- 909 source groups
 
-## Canonical dataset composition decision
+Manual filtering:
 
-Approved first-baseline composition strategy:
+- accepted training positives before duplicate cleanup: 609
+- reject plate/OCR crop: 640
+- reject mosaic/collage: 290
+- unsure: 0
 
-### Training
+After exact-duplicate annotation adjudication:
 
-REAL sources:
+- final eligible: 607 images
+- final instances: 633
+- usage: TRAIN ONLY
 
-- sequence-safe Romanian data assigned to training
-- Open-Images-derived real detector data
-- filtered clean samples from the existing Kaggle detector subset
+Upstream split organization is not reused.
 
-SYNTHETIC source:
+### ELPD
 
-- ELPD usable positive samples only
+Role: **SYNTHETIC EUROPEAN SUPPLEMENTAL TRAIN-ONLY SOURCE**
 
-Initial sampling rule:
+Raw:
 
-- target at least 75% REAL samples
-- cap synthetic ELPD contribution at approximately 25% of detector training samples for the first baseline
+- 2329 images
 
-This is a first-baseline sampling policy, not a permanent architecture constraint. It may be revised later from measured detector error analysis.
+Excluded from derived training pool:
 
-### Validation
+- 4 corrupt images
+- 39 incomplete empty-label images
 
-Primary validation must be REAL.
+Usable positive pool:
 
-Eligible:
+- 2286 images
+- 2947 plate instances
 
-- sequence-safe Romanian real data
-- filtered realistic Open Images scenes
+Included in baseline_v1 due to synthetic cap:
 
-Exclude from primary validation:
+- 1905 images
+- 2446 plate instances
 
-- ELPD
-- mosaic/collage samples
-- OCR/character crops
-- source-leaking variants
+Remaining eligible ELPD samples are preserved but not materialized into baseline_v1.
 
-### Test
+ELPD remains TRAIN_ONLY and SYNTHETIC.
 
-Primary test benchmark should be 100% REAL where practical.
+### Open Images real negative pool
 
-Priority:
+Role: **REAL DETECTOR NEGATIVES**
 
-1. sequence-held-out Romanian/EU real samples
-2. realistic full-vehicle/full-scene Open Images samples
+Accepted audited negatives:
 
-No train source group / video sequence / near-duplicate group may appear in the primary test set.
+- 504 unique ImageIDs
+- 0 plate instances
 
-ELPD must not contribute to the primary AVAX test metric.
+Category distribution:
 
-## Detector-negative strategy — Master decision
+- vehicle without visible plate candidates: 172
+- road/gate scenes: 159
+- heavy-equipment candidates: 128
+- barrier/background: 24
+- people: 15
+- text-like objects: 6
 
-The current positive datasets do not provide a trustworthy real detector-negative pool.
+Canonical split:
 
-Master decision: **curate a dedicated real negative subset from provenance-safe Open Images data.**
+- TRAIN: 404
+- VAL: 50
+- TEST: 50
 
-This is not a search for another license-plate dataset. It is a targeted negative-frame collection task.
+A sample is treated as a detector negative only after audit confirms no visible license plate.
 
-Required negative categories should include, where available:
+## Canonical normalization
 
-- vehicles with no visible plate
-- partial vehicles / vehicle fragments
-- empty road and gate-like scenes
-- people
-- construction machinery / heavy equipment
-- signs and text-like objects
-- barriers / fences / gate infrastructure
-- background scenes likely to create plate-like false positives
+Canonical class:
 
-Negative acceptance rule:
+`0 = license_plate`
 
-- an image is a detector negative only if no license plate is visibly present after audit
-- absence of a `Vehicle registration plate` annotation alone is not sufficient proof of a true negative
-- source ImageID and per-image provenance/license metadata must be retained
-- raw Open Images data must remain untouched
+Canonical annotation format:
 
-Initial negative-pool target:
+`YOLO normalized XYWH`
 
-- curate approximately 500–1000 audited REAL negatives for the first baseline
-- prefer diversity over volume
-- do not exceed this range merely to increase dataset size before first model error analysis
+The use of YOLO annotation format does not by itself lock AVAX to a specific detector architecture or runtime.
 
-After the first detector baseline, false-positive analysis may justify expanding or rebalancing the negative pool.
+Canonical pre-filter pool:
 
-## AVAX field-domain limitation
+- 9299 images
+- 8795 positives
+- 504 negatives
+- 12083 plate instances
+- REAL: 7013
+- SYNTHETIC: 2286
 
-Construction-site, heavy-equipment, security-gate, muddy-site, and fixed gate-camera representation is currently limited.
+Images are copied without re-encoding. Raw source datasets are not modified.
 
-Master decision:
+## Duplicate / leakage safety
 
-- this does NOT block the first public-data detector baseline
-- it must be documented as an explicit domain limitation
-- do not acquire/use private AVAX field imagery without explicit authorization
-- create a later dedicated domain-adaptation / field-validation work package before production detector sign-off if authorized field data becomes available
+Canonical images analyzed: `9299`
 
-Proposed future follow-up:
+- unique decoded-pixel SHA256 hashes: 9297
+- leakage source groups: 8510
+- exact duplicate groups: 2
+- images in exact duplicate groups: 4
+- exact groups crossing source-group boundaries: 0
+
+Perceptual duplicate analysis:
+
+- pHash threshold <= 8
+- dHash threshold <= 10
+- aspect-ratio relative difference <= 0.15
+- unresolved near-duplicate candidate pairs: 0
+
+After manual exact-duplicate annotation adjudication:
+
+- eligible candidate pool: 9297 images
+- eligible positive images: 8793
+- negatives: 504
+- plate instances: 12081
+
+Final split leakage validation: PASS.
+
+## Licensing / provenance status
+
+Third-party dataset attribution and license preservation are maintained in `documentation/THIRD_PARTY_NOTICES.md` and AI provenance artifacts.
+
+Confirmed source-level handling includes:
+
+- Romanian public LP: MIT repository license preserved
+- Open Images image-level metadata: CC BY 2.0 attribution/provenance retained per accepted ImageID
+- Open Images annotation provenance/attribution retained where applicable
+- ELPD: CC BY 4.0 attribution retained; synthetic/derived status preserved
+- Kaggle `plate_license_recognition`: Kaggle data card currently reports Apache 2.0; source is used TRAIN_ONLY and its attribution/license record must be retained
+
+External redistribution of raw datasets remains separate from model distribution and requires preservation of all applicable source notices and attribution.
+
+## Known domain limitation
+
+The accepted public baseline still has limited dedicated AVAX construction-site coverage for:
+
+- mud
+- heavy dust
+- fixed gate-camera geometry
+- AVAX-specific vehicle approaches
+- severe construction-site occlusion
+- site-specific night/headlight conditions
+
+This does not block the first detector baseline.
+
+Private AVAX field imagery has not been incorporated without explicit Master authorization.
+
+Future follow-up remains:
 
 `AI-DATA-WP-002 — AVAX Field Domain Adaptation & Validation Dataset`
 
 - Status: `PROPOSED`
 - Priority: `P1 High before production AI sign-off`
-- Not a dependency for the first AI-WP-001 baseline
 
-## Immediate next execution
+## Next work package
 
-AI-DATA-WP-001 should now:
+`AI-WP-001 — License Plate Detector Baseline & Mobile Export Contract`
 
-1. curate and audit the real Open Images negative pool;
-2. normalize all accepted source annotations into one derived canonical detector format;
-3. preserve per-sample source, provenance, synthetic/real flag, and source-group/sequence identity;
-4. perform near-duplicate/group analysis before splitting;
-5. construct leakage-safe canonical train/validation/test splits under the approved source-role rules;
-6. produce factual final split counts and real/synthetic/negative composition;
-7. validate the derived dataset without modifying raw sources;
-8. return `MASTER HANDOFF — AI-DATA-WP-001` for acceptance.
+Immediate sequence:
 
-Do NOT begin detector training until Master accepts the final canonical dataset handoff.
+1. select/justify the first lightweight detector baseline;
+2. create a reproducible training configuration against `baseline_v1`;
+3. train and select checkpoint using TRAIN/VAL only;
+4. evaluate final selected checkpoint on TEST without tuning on TEST;
+5. report Precision, Recall, mAP@0.5 and mAP@0.5:0.95;
+6. perform failure analysis including false positives on the audited negative pool;
+7. select confidence/NMS behavior from validation evidence;
+8. export at least one mobile-consumable artifact;
+9. validate exported inference against reference inference;
+10. finalize the Mobile Detector Contract.
+
+Do not use TEST to tune hyperparameters or confidence thresholds.
 
 ## Confirmed completed work
 
@@ -267,6 +321,7 @@ Do NOT begin detector training until Master accepts the final canonical dataset 
 | BE-WP-003 | Access Log Ingestion API v1 | P0 | DONE |
 | MOB-WP-003 | Background Access Log Upload | P0 | DONE |
 | CAM-WP-001 | CameraX Foundation | P0 | DONE |
+| AI-DATA-WP-001 | License Plate Detector Dataset Acquisition & Annotation Foundation | P0 | DONE |
 
 ## Backend / production follow-up
 
@@ -300,16 +355,14 @@ No detector or OCR integration is yet confirmed implemented.
 - `TD-004` — no vehicle lookup index in production
 - production access-log persistence deployment pending
 - no access-log retention policy defined
-- canonical detector dataset not yet finalized
-- AVAX field-domain detector data is limited
+- AVAX field-domain detector data remains limited
 
 ## Explicitly not confirmed as implemented
 
-- final canonical detector dataset
-- detector training
 - trained license-plate detector
+- finalized detector architecture/runtime choice
 - OCR
-- ONNX/TFLite mobile detector runtime integration
+- ONNX/TFLite mobile detector integration
 - automatic camera plate lookup
 - automatic camera-generated access decision
 - automatic camera-generated access logging
