@@ -28,18 +28,18 @@ CameraX
 
 The system remains offline-first. AI does not decide access.
 
-## Current AI milestone
+## AI-WP-001 — Detector baseline and mobile export
 
 `AI-WP-001 — License Plate Detector Baseline & Mobile Export Contract`
 
 - Priority: `P0 Critical`
-- Status: `IN PROGRESS`
+- Status: `DONE`
 - Target project: AVAX ALPR – AI Model
 - Dataset dependency: `AI-DATA-WP-001 — DONE`
 
-TRAIN/VAL detector development is frozen.
+Master accepted the frozen YOLOX-Nano 512 detector handoff for Accelerated MVP integration.
 
-### Frozen detector selection
+### Frozen detector
 
 Architecture: `YOLOX-Nano`  
 Input: `512x512`  
@@ -48,128 +48,194 @@ Checkpoint SHA256: `9A0C6A9D8ED0B9CAD31212F7ADDECF2C35C4B2CFF932ACFF1D02DF345197
 Confidence threshold: `0.225`  
 NMS threshold: `0.45`
 
-VAL operating point:
+### Final TEST one-shot
 
-- TP: `682`
-- FP: `148`
-- FN: `175`
-- Precision: `0.8217`
-- Recall: `0.7958`
-- F1: `0.8085`
-- best VAL mAP@0.50:0.95: `0.4250771`
+Reserved TEST was accessed once after detector freeze. No post-TEST tuning was performed.
 
-Compared with the previous 416x416 baseline at the same runtime threshold, the selected 512 model produced +30 TP, -30 FN, approximately +3.5 percentage points Recall and approximately +2.2 points F1.
+- TEST images: `669`
+- plate instances: `914`
+- negative images: `50`
+- mAP@0.50:0.95: `0.450475`
+- mAP@0.50: `0.812652`
+- TP: `747`
+- FP: `159`
+- FN: `167`
+- Precision: `0.824503`
+- Recall: `0.817287`
+- F1: `0.820879`
+- negative images with false positives: `3`
+- negative false-positive detections: `3`
 
-Main observed remaining weakness: small/distant plates, followed by difficult multi-plate scenes, blur, angle, occlusion and some annotation issues.
+The COCO AP protocol uses its evaluation operating settings; the frozen mobile/runtime operating point remains confidence `0.225` and NMS `0.45`.
 
-Selection was frozen before TEST access.
+### ONNX artifact
 
-Reference AI commit:
+Filename:
 
-`82d6dda` — Freeze YOLOX Nano 512 detector selection
+`avax_plate_detector_yolox_nano_512_v1.onnx`
 
-## Accelerated AI-WP-001 completion scope
+- format: ONNX
+- opset: `17`
+- size: `3,703,049 bytes`
+- SHA256: `B42313FE76EFCD98332430A25FE6BEEC553FC5FE7633957917453836AEA81793`
+- batch: `1`
+- dynamic shapes: `NO`
+- input: `images [1,3,512,512] float32 NCHW`
+- output: `output [1,5376,6]`
+- YOLOX grid/stride decode: included in model
 
-To finish the detector quickly, only the following remain P0 for AI-WP-001:
+ONNX checker, ONNX Runtime load/inference, and PyTorch-vs-ONNX validation passed.
 
-1. run the frozen 512 model once on TEST and record final metrics;
-2. export the selected detector to ONNX;
-3. validate that ONNX inference is functionally consistent with the selected PyTorch checkpoint;
-4. freeze a minimal Mobile Detector Contract sufficient for Guard integration;
-5. hand the ONNX artifact/contract to Guard Mobile.
+Reference/export comparison on 6 VAL samples:
 
-Android device performance validation is moved to the mobile integration work package, where actual device latency matters.
+- raw tensor consistency: PASS
+- detection consistency: PASS
+- max raw absolute difference: `0.0094757080078125`
+- max observed box difference: `0.00006103515625 px`
+- max observed confidence difference: `0.00000017881393432617188`
 
-The following are deferred unless they become blockers:
+### Frozen Mobile Detector Contract
 
-- 640x640 detector challenger
-- additional detector architectures
-- broad hyperparameter search
-- additional detector threshold sweeps
-- FP16/INT8 optimization
-- TFLite/LiteRT comparison if ONNX Runtime is usable
-- extensive model/runtime benchmarking
-- AVAX-specific field-domain adaptation
-- extended detector error taxonomy
+Preprocessing:
+
+```text
+CameraFrame
+-> apply rotationDegrees clockwise (0/90/180/270)
+-> preserve aspect ratio
+-> resize into 512x512 using bilinear interpolation
+-> place resized image top-left
+-> pad right/bottom with 114
+-> HWC -> CHW
+-> uint8 -> float32
+-> batch dimension
+```
+
+No divide-by-255, mean subtraction, or standard-deviation normalization.
+
+Detector semantic output:
+
+```text
+PlateDetection
+- left: float
+- top: float
+- right: float
+- bottom: float
+- confidence: float
+```
+
+Coordinates are returned in original `CameraFrame` buffer pixel coordinates after undoing letterbox and rotation.
+
+Detector responsibility remains bounding boxes + confidence only. OCR and access decisions remain separate downstream responsibilities.
+
+### Performance status
+
+Desktop model-forward timing: approximately `1.567 ms/image` on NVIDIA GeForce RTX 5060 Laptop GPU.
+
+This is not an Android benchmark.
+
+Android latency: `NOT YET MEASURED`.
+
+Android runtime latency, thermal behavior and frame-selection behavior move to `MOB-AI-WP-001`.
+
+### Reference commits
+
+Pre-TEST detector freeze:
+
+`82d6dda`
+
+Final AI-WP-001 detector/ONNX handoff:
+
+`5d2e1022d924a8b364b86882b9d4d57c94b652cc`
 
 ## Accelerated parallel sequence
 
-The project should no longer run Phase 4 strictly serially.
+Detector research is closed for MVP unless mobile integration exposes a real blocker.
 
-Parallel work is approved:
+Parallel work is now:
 
 ```text
-AI Detector finalization
-    -> TEST + ONNX + contract
+Guard Mobile detector integration
+    -> ONNX Runtime Android
+    -> physical-device detector benchmark
 
 AI OCR MVP
-    -> baseline OCR + mobile artifact/contract
+    -> simplest viable offline OCR baseline/contract
 
-Guard Mobile
-    -> integrate detector as soon as ONNX/contract is available
-    -> integrate OCR as soon as OCR artifact/contract is available
+then
+
+Guard Mobile OCR + automatic local verification
 ```
-
-Guard Mobile does not need to wait for additional detector experimentation after the frozen detector artifact is available.
 
 ## Next critical work packages
 
-### AI-WP-001 — Detector finalization
-
-Status: `IN PROGRESS`  
-Priority: `P0`
-
-Fast-exit acceptance:
-
-- TEST run completed once with frozen settings
-- ONNX export loads and runs
-- output consistency smoke test passes
-- preprocessing/output contract documented
-- artifact ready for Guard integration
-
-### AI-WP-002 — OCR MVP Baseline & Mobile Export Contract
-
-Status: `TODO`  
-Priority: `P0`
-
-Accelerated objective:
-
-Build the simplest usable plate OCR baseline and export contract. The target is useful end-to-end plate recognition, not research-grade OCR optimization.
-
-Deferred from OCR MVP unless required:
-
-- large OCR model comparison
-- extensive country-specific grammar engines
-- sophisticated multi-frame OCR fusion
-- exhaustive augmentation studies
-- broad benchmark matrix
-
 ### MOB-AI-WP-001 — On-device Detector Integration
 
-Status: `TODO / START AS SOON AS DETECTOR ONNX IS AVAILABLE`  
+Status: `TODO / READY TO START`  
 Priority: `P0`
 
 Objective:
 
-Connect the selected detector to the existing CameraX `FrameProcessor` boundary, measure actual device latency, and produce plate crops/bounding boxes for OCR.
+Connect the accepted detector to the existing CameraX `FrameProcessor` boundary, measure actual target-device latency, and produce valid plate bounding boxes/crops for downstream OCR.
+
+Accelerated runtime decision:
+
+Use ONNX Runtime Android as the first runtime path. Do not evaluate alternative mobile runtimes unless ONNX Runtime fails to provide a usable MVP path.
 
 Minimum success:
 
-- model loads offline on target Android device
-- frame preprocessing works
-- detector returns visible plate boxes
-- no raw frame upload/persistence
+- exact accepted ONNX model loads offline on target Android device
+- CameraFrame -> model preprocessing matches the frozen AI contract
+- detector returns visible plate boxes in original frame coordinates
+- confidence `0.225` and NMS `0.45` are applied
 - app remains responsive
-- inference cadence can be reduced if continuous full-frame inference is too slow
+- actual device latency is measured
+- no raw frame upload/persistence
+- existing manual plate verification still works
+
+### AI-WP-002 — OCR MVP Baseline & Mobile Contract
+
+Status: `TODO / READY TO START IN PARALLEL`  
+Priority: `P0`
+
+Accelerated objective:
+
+Build the simplest usable offline plate OCR path. Prefer an existing lightweight mobile-capable Latin OCR solution before considering custom OCR training.
+
+The objective is useful end-to-end plate recognition, not research-grade OCR optimization.
+
+Deferred unless required by a real blocker:
+
+- large OCR model comparison
+- custom OCR training from scratch
+- extensive country-specific grammar engines
+- sophisticated multi-frame OCR fusion
+- exhaustive augmentation studies
+- broad benchmark matrix
 
 ### MOB-AI-WP-002 — OCR + Automatic Local Verification Pipeline
 
 Status: `TODO`  
 Priority: `P0`
 
+Dependencies:
+
+- `MOB-AI-WP-001` usable detector integration
+- `AI-WP-002` usable OCR contract/runtime recommendation
+
 Objective:
 
-Connect detector crop -> OCR -> PlateNormalizer -> Room lookup -> AccessChecker -> local result -> existing access-log flow.
+Connect:
+
+```text
+PlateDetection
+-> Plate Crop
+-> OCR
+-> PlateNormalizer
+-> Room lookup
+-> AccessChecker
+-> local result
+-> existing local access-log flow
+```
 
 This work package represents the core first usable automatic ALPR milestone.
 
@@ -211,6 +277,7 @@ Accepted canonical dataset:
 | MOB-WP-003 | Background Access Log Upload | P0 | DONE |
 | CAM-WP-001 | CameraX Foundation | P0 | DONE |
 | AI-DATA-WP-001 | Detector Dataset Foundation | P0 | DONE |
+| AI-WP-001 | Detector Baseline & Mobile Export Contract | P0 | DONE |
 
 ## Production follow-up not required to finish the app MVP
 
