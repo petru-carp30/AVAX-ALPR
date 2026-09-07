@@ -5,7 +5,7 @@
 
 ## Delivery mode
 
-Project delivery is now operating in **ACCELERATED MVP MODE**.
+Project delivery is operating in **ACCELERATED MVP MODE**.
 
 Goal: finish the first usable Guard ALPR application as quickly as possible, accepting an approximately 80% solution if the core operational flow works reliably.
 
@@ -28,238 +28,192 @@ CameraX
 
 The system remains offline-first. AI does not decide access.
 
-## AI-WP-001 — Detector baseline and mobile export
+## Current critical path
 
-`AI-WP-001 — License Plate Detector Baseline & Mobile Export Contract`
+The detector side is now complete through physical Android integration.
 
-- Priority: `P0 Critical`
+Remaining critical path:
+
+```text
+AI-WP-002 — OCR MVP Baseline & Mobile Contract
+        ↓
+MOB-AI-WP-002 — OCR + Automatic Local Verification Pipeline
+        ↓
+Physical end-to-end MVP validation
+```
+
+Parallel execution means work packages may complete at different times. `MOB-AI-WP-001` finishing before the OCR workstream is expected and does not invalidate the parallel plan.
+
+## AI detector status
+
+### AI-DATA-WP-001 — Detector Dataset Foundation
+
+- Priority: `P0`
 - Status: `DONE`
-- Target project: AVAX ALPR – AI Model
-- Dataset dependency: `AI-DATA-WP-001 — DONE`
-
-Master accepted the frozen YOLOX-Nano 512 detector handoff for Accelerated MVP integration.
-
-### Frozen detector
-
-Architecture: `YOLOX-Nano`  
-Input: `512x512`  
-Selected checkpoint epoch: `60`  
-Checkpoint SHA256: `9A0C6A9D8ED0B9CAD31212F7ADDECF2C35C4B2CFF932ACFF1D02DF34519746B0`  
-Confidence threshold: `0.225`  
-NMS threshold: `0.45`
-
-### Final TEST one-shot
-
-Reserved TEST was accessed once after detector freeze. No post-TEST tuning was performed.
-
-- TEST images: `669`
-- plate instances: `914`
-- negative images: `50`
-- mAP@0.50:0.95: `0.450475`
-- mAP@0.50: `0.812652`
-- TP: `747`
-- FP: `159`
-- FN: `167`
-- Precision: `0.824503`
-- Recall: `0.817287`
-- F1: `0.820879`
-- negative images with false positives: `3`
-- negative false-positive detections: `3`
-
-The COCO AP protocol uses its evaluation operating settings; the frozen mobile/runtime operating point remains confidence `0.225` and NMS `0.45`.
-
-### ONNX artifact
-
-Filename:
-
-`avax_plate_detector_yolox_nano_512_v1.onnx`
-
-- format: ONNX
-- opset: `17`
-- size: `3,703,049 bytes`
-- SHA256: `B42313FE76EFCD98332430A25FE6BEEC553FC5FE7633957917453836AEA81793`
-- batch: `1`
-- dynamic shapes: `NO`
-- input: `images [1,3,512,512] float32 NCHW`
-- output: `output [1,5376,6]`
-- YOLOX grid/stride decode: included in model
-
-ONNX checker, ONNX Runtime load/inference, and PyTorch-vs-ONNX validation passed.
-
-Reference/export comparison on 6 VAL samples:
-
-- raw tensor consistency: PASS
-- detection consistency: PASS
-- max raw absolute difference: `0.0094757080078125`
-- max observed box difference: `0.00006103515625 px`
-- max observed confidence difference: `0.00000017881393432617188`
-
-### Frozen Mobile Detector Contract
-
-Preprocessing:
-
-```text
-CameraFrame
--> apply rotationDegrees clockwise (0/90/180/270)
--> preserve aspect ratio
--> resize into 512x512 using bilinear interpolation
--> place resized image top-left
--> pad right/bottom with 114
--> HWC -> CHW
--> uint8 -> float32
--> batch dimension
-```
-
-No divide-by-255, mean subtraction, or standard-deviation normalization.
-
-Detector semantic output:
-
-```text
-PlateDetection
-- left: float
-- top: float
-- right: float
-- bottom: float
-- confidence: float
-```
-
-Coordinates are returned in original `CameraFrame` buffer pixel coordinates after undoing letterbox and rotation.
-
-Detector responsibility remains bounding boxes + confidence only. OCR and access decisions remain separate downstream responsibilities.
-
-### Performance status
-
-Desktop model-forward timing: approximately `1.567 ms/image` on NVIDIA GeForce RTX 5060 Laptop GPU.
-
-This is not an Android benchmark.
-
-Android latency: `NOT YET MEASURED`.
-
-Android runtime latency, thermal behavior and frame-selection behavior move to `MOB-AI-WP-001`.
-
-### Reference commits
-
-Pre-TEST detector freeze:
-
-`82d6dda`
-
-Final AI-WP-001 detector/ONNX handoff:
-
-`5d2e1022d924a8b364b86882b9d4d57c94b652cc`
-
-## Accelerated parallel sequence
-
-Detector research is closed for MVP unless mobile integration exposes a real blocker.
-
-Parallel work is now:
-
-```text
-Guard Mobile detector integration
-    -> ONNX Runtime Android
-    -> physical-device detector benchmark
-
-AI OCR MVP
-    -> simplest viable offline OCR baseline/contract
-
-then
-
-Guard Mobile OCR + automatic local verification
-```
-
-## Next critical work packages
-
-### MOB-AI-WP-001 — On-device Detector Integration
-
-Status: `TODO / READY TO START`  
-Priority: `P0`
-
-Objective:
-
-Connect the accepted detector to the existing CameraX `FrameProcessor` boundary, measure actual target-device latency, and produce valid plate bounding boxes/crops for downstream OCR.
-
-Accelerated runtime decision:
-
-Use ONNX Runtime Android as the first runtime path. Do not evaluate alternative mobile runtimes unless ONNX Runtime fails to provide a usable MVP path.
-
-Minimum success:
-
-- exact accepted ONNX model loads offline on target Android device
-- CameraFrame -> model preprocessing matches the frozen AI contract
-- detector returns visible plate boxes in original frame coordinates
-- confidence `0.225` and NMS `0.45` are applied
-- app remains responsive
-- actual device latency is measured
-- no raw frame upload/persistence
-- existing manual plate verification still works
-
-### AI-WP-002 — OCR MVP Baseline & Mobile Contract
-
-Status: `TODO / READY TO START IN PARALLEL`  
-Priority: `P0`
-
-Accelerated objective:
-
-Build the simplest usable offline plate OCR path. Prefer an existing lightweight mobile-capable Latin OCR solution before considering custom OCR training.
-
-The objective is useful end-to-end plate recognition, not research-grade OCR optimization.
-
-Deferred unless required by a real blocker:
-
-- large OCR model comparison
-- custom OCR training from scratch
-- extensive country-specific grammar engines
-- sophisticated multi-frame OCR fusion
-- exhaustive augmentation studies
-- broad benchmark matrix
-
-### MOB-AI-WP-002 — OCR + Automatic Local Verification Pipeline
-
-Status: `TODO`  
-Priority: `P0`
-
-Dependencies:
-
-- `MOB-AI-WP-001` usable detector integration
-- `AI-WP-002` usable OCR contract/runtime recommendation
-
-Objective:
-
-Connect:
-
-```text
-PlateDetection
--> Plate Crop
--> OCR
--> PlateNormalizer
--> Room lookup
--> AccessChecker
--> local result
--> existing local access-log flow
-```
-
-This work package represents the core first usable automatic ALPR milestone.
-
-## Accepted detector dataset
-
-`AI-DATA-WP-001 — License Plate Detector Dataset Acquisition & Annotation Foundation`
-
-Status: `DONE`
-
-Accepted canonical dataset:
-
-`AI/PlateDetector/datasets/derived/baseline_v1`
-
+- Accepted dataset: `AI/PlateDetector/datasets/derived/baseline_v1`
 - 8916 images
 - 8412 positives
 - 504 audited real negatives
 - 11580 plate instances
-- TRAIN 7622
-- VAL 625
-- TEST 669
+- TRAIN 7622 / VAL 625 / TEST 669
 - source-group leakage 0
 - exact-pixel leakage 0
 - unresolved near-duplicate candidates 0
-- VAL/TEST real-only
+
+### AI-WP-001 — Detector Baseline & Mobile Export Contract
+
+- Priority: `P0`
+- Status: `DONE`
+
+Frozen detector:
+
+- architecture: `YOLOX-Nano`
+- input: `512x512`
+- selected epoch: `60`
+- confidence threshold: `0.225`
+- NMS threshold: `0.45`
+
+Final TEST one-shot:
+
+- mAP@0.50:0.95: `0.450475`
+- mAP@0.50: `0.812652`
+- Precision: `0.824503`
+- Recall: `0.817287`
+- F1: `0.820879`
+
+Accepted ONNX artifact:
+
+`avax_plate_detector_yolox_nano_512_v1.onnx`
+
+- opset: `17`
+- size: `3,703,049 bytes`
+- SHA256: `B42313FE76EFCD98332430A25FE6BEEC553FC5FE7633957917453836AEA81793`
+
+Reference AI commit:
+
+`5d2e1022d924a8b364b86882b9d4d57c94b652cc`
+
+## MOB-AI-WP-001 — On-device Detector Integration
+
+- Priority: `P0`
+- Status: `DONE`
+- Target project: AVAX ALPR – Guard Mobile App
+
+Master accepted the mobile detector integration handoff.
+
+Implemented:
+
+- ONNX Runtime Android
+- exact accepted detector artifact validation by size/SHA256/input/output metadata
+- YUV CameraFrame -> BGR -> rotation -> 512x512 top-left letterbox -> NCHW float32 preprocessing
+- confidence `0.225`
+- NMS `0.45`
+- inverse letterbox/rotation to original CameraFrame coordinates
+- `PlateDetection(left, top, right, bottom, confidence)` semantic output
+- `PlateDetectorFrameProcessor` connected to existing CameraX `FrameProcessor` boundary
+- `ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST` preserved
+- fixed inference cadence capability available through `minInferenceIntervalMs`
+- minimal detector diagnostics and white bounding-box overlay
+- detector failure preserves manual Guard fallback
+- no raw camera-frame persistence/upload
+
+Physical target device:
+
+`Google Pixel 6 Pro`
+
+Observed offline performance:
+
+- model load: approximately `107–150 ms`
+- model inference: approximately `151–210 ms`
+- total preprocessing + inference + postprocessing: approximately `383–554 ms/frame`
+- observed cadence: approximately `1.8–2.6 fps`
+
+Representative run:
+
+- load: `107.2 ms`
+- detections: `2`
+- inference: `210.3 ms`
+- total: `497.0 ms`
+- cadence: `2.0 fps`
+
+Physical validation passed:
+
+- offline application start
+- CameraX preview
+- offline model load
+- real plate detection
+- bounding-box correspondence
+- lifecycle/background-foreground recovery
+- manual plate verification fallback
+- no raw-frame persistence/upload
+- responsive application during inference
+
+Automated validation:
+
+- `testDebugUnitTest` — PASS
+- `assembleDebug` — PASS
+
+Reference Guard commit:
+
+`4ee903de9ab823312c98263bbb7cd22938277e92`
+
+Known non-blocking mobile detector debt:
+
+- preprocessing is a meaningful part of current end-to-end detector latency
+- current approximately 2 fps cadence is accepted for gate-scanning MVP
+- production overlay mapping/polish is deferred
+- `PlateDetectorFrameProcessor.kt` package/source-tree organization may be cleaned up later
+
+## AI-WP-002 — OCR MVP Baseline & Mobile Contract
+
+- Priority: `P0`
+- Status: `TODO / READY TO START OR CONTINUE`
+- Target project: AVAX ALPR – AI Model
+
+Objective:
+
+Provide the simplest viable offline Android-capable plate OCR solution and a minimal integration contract.
+
+Prefer an existing lightweight offline Latin OCR solution over custom training if it is usable and legally suitable.
+
+Deferred unless a real blocker appears:
+
+- custom OCR training from scratch
+- broad OCR model comparison
+- sophisticated grammar engines
+- multi-frame OCR voting
+- extensive augmentation/benchmark studies
+
+## MOB-AI-WP-002 — OCR + Automatic Local Verification Pipeline
+
+- Priority: `P0`
+- Status: `TODO / BLOCKED ONLY ON OCR CONTRACT`
+- Target project: AVAX ALPR – Guard Mobile App
+
+Satisfied dependency:
+
+- `MOB-AI-WP-001 — DONE`
+
+Remaining dependency:
+
+- usable `AI-WP-002` OCR engine/contract
+
+Target flow:
+
+```text
+CameraFrame
+-> PlateDetection
+-> plate crop
+-> OCR
+-> PlateNormalizer
+-> Room local lookup
+-> AccessChecker
+-> access result
+-> existing local access log
+-> existing background sync
+```
+
+Manual plate entry remains the fallback if automatic OCR fails.
 
 ## Confirmed completed foundation
 
@@ -278,41 +232,27 @@ Accepted canonical dataset:
 | CAM-WP-001 | CameraX Foundation | P0 | DONE |
 | AI-DATA-WP-001 | Detector Dataset Foundation | P0 | DONE |
 | AI-WP-001 | Detector Baseline & Mobile Export Contract | P0 | DONE |
+| MOB-AI-WP-001 | On-device Detector Integration | P0 | DONE |
 
-## Production follow-up not required to finish the app MVP
+## Production follow-up not required to finish app MVP
 
 `BE-WP-004 — SQL Server Access Log Persistence & Controlled Deployment`
 
 - Status: `TODO`
-- Priority: `P0 before production`, but not a blocker for completing the on-device Guard ALPR MVP
+- Priority: `P0 before production`
+- Not a blocker for finishing the Guard automatic ALPR MVP
 
-Production access-log storage must still be completed before production rollout.
+## Deferred scope
 
-## Deferred scope summary
+Deferred work remains documented in:
 
-Deferred after first usable MVP unless a measured blocker appears:
+`documentation/DEFERRED_SCOPE.md`
 
-- detector challengers/extra training
-- AVAX field-domain dataset adaptation
-- detector quantization/runtime comparisons
-- advanced camera overlays/tracking
-- sophisticated frame scheduling
-- broad device compatibility matrix
-- automatic background vehicle snapshot synchronization
-- Manager Approve/Deny
-- push notifications
-- Admin Dashboard
-- analytics
-- incremental Vehicle Sync v2
-- schema cleanup technical debt
-- retention policy
-- extensive deployment automation and observability
-
-Full list: `documentation/DEFERRED_SCOPE.md`.
+This includes detector optimization, quantization/runtime comparisons, advanced tracking/overlay, broad device testing, AVAX field-domain adaptation, Manager/Admin workflows, analytics, Sync v2, schema cleanup, and deeper deployment/observability work.
 
 ## MVP release gate
 
-The first accelerated MVP is considered functionally complete when, on a physical target device:
+The accelerated MVP is functionally complete only after physical-device validation of:
 
 ```text
 Camera
@@ -326,13 +266,11 @@ Camera
 -> pending access event can sync when connectivity returns
 ```
 
-Manual plate verification remains the fallback if AI confidence/recognition fails.
-
 ## Governance
 
 - Only Master-confirmed implementation and validation may be marked `DONE`.
-- Deferred does not mean cancelled; deferred work is preserved in `DEFERRED_SCOPE.md`.
+- Deferred does not mean cancelled.
 - AI never decides access.
 - Guard Mobile never connects directly to SQL Server.
-- Manager/Admin must not communicate directly with Guard Mobile; server-side communication passes through Backend API.
-- Minimum physical-device validation of the automatic ALPR flow is mandatory before calling the accelerated MVP complete.
+- Manager/Admin server-side communication passes through Backend API.
+- Minimum physical-device validation of the automatic end-to-end ALPR flow remains mandatory before calling the accelerated MVP complete.
