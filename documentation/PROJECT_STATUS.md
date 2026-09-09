@@ -1,6 +1,6 @@
 # AVAX ALPR Project Status
 
-**Status snapshot:** 2026-09-07  
+**Status snapshot:** 2026-09-09  
 **Source of truth:** AVAX ALPR Master Plan & Current Status
 
 ## Delivery mode
@@ -30,19 +30,17 @@ The system remains offline-first. AI does not decide access.
 
 ## Current critical path
 
-The detector side is now complete through physical Android integration.
+Detector and OCR foundation are both complete.
 
 Remaining critical path:
 
 ```text
-AI-WP-002 — OCR MVP Baseline & Mobile Contract
-        ↓
 MOB-AI-WP-002 — OCR + Automatic Local Verification Pipeline
         ↓
 Physical end-to-end MVP validation
+        ↓
+Bug-fix only until MVP acceptance
 ```
-
-Parallel execution means work packages may complete at different times. `MOB-AI-WP-001` finishing before the OCR workstream is expected and does not invalidate the parallel plan.
 
 ## AI detector status
 
@@ -99,23 +97,14 @@ Reference AI commit:
 - Status: `DONE`
 - Target project: AVAX ALPR – Guard Mobile App
 
-Master accepted the mobile detector integration handoff.
-
-Implemented:
+Accepted mobile detector integration:
 
 - ONNX Runtime Android
-- exact accepted detector artifact validation by size/SHA256/input/output metadata
-- YUV CameraFrame -> BGR -> rotation -> 512x512 top-left letterbox -> NCHW float32 preprocessing
-- confidence `0.225`
-- NMS `0.45`
-- inverse letterbox/rotation to original CameraFrame coordinates
-- `PlateDetection(left, top, right, bottom, confidence)` semantic output
-- `PlateDetectorFrameProcessor` connected to existing CameraX `FrameProcessor` boundary
-- `ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST` preserved
-- fixed inference cadence capability available through `minInferenceIntervalMs`
-- minimal detector diagnostics and white bounding-box overlay
-- detector failure preserves manual Guard fallback
-- no raw camera-frame persistence/upload
+- exact accepted detector artifact validation
+- frozen preprocessing/postprocessing contract implemented
+- original CameraFrame coordinates returned
+- manual fallback preserved
+- no raw-frame persistence/upload
 
 Physical target device:
 
@@ -128,75 +117,123 @@ Observed offline performance:
 - total preprocessing + inference + postprocessing: approximately `383–554 ms/frame`
 - observed cadence: approximately `1.8–2.6 fps`
 
-Representative run:
-
-- load: `107.2 ms`
-- detections: `2`
-- inference: `210.3 ms`
-- total: `497.0 ms`
-- cadence: `2.0 fps`
-
-Physical validation passed:
-
-- offline application start
-- CameraX preview
-- offline model load
-- real plate detection
-- bounding-box correspondence
-- lifecycle/background-foreground recovery
-- manual plate verification fallback
-- no raw-frame persistence/upload
-- responsive application during inference
-
-Automated validation:
-
-- `testDebugUnitTest` — PASS
-- `assembleDebug` — PASS
-
 Reference Guard commit:
 
 `4ee903de9ab823312c98263bbb7cd22938277e92`
 
-Known non-blocking mobile detector debt:
-
-- preprocessing is a meaningful part of current end-to-end detector latency
-- current approximately 2 fps cadence is accepted for gate-scanning MVP
-- production overlay mapping/polish is deferred
-- `PlateDetectorFrameProcessor.kt` package/source-tree organization may be cleaned up later
-
 ## AI-WP-002 — OCR MVP Baseline & Mobile Contract
 
 - Priority: `P0`
-- Status: `TODO / READY TO START OR CONTINUE`
+- Status: `DONE`
 - Target project: AVAX ALPR – AI Model
 
-Objective:
+Master accepted the OCR MVP handoff for accelerated integration.
 
-Provide the simplest viable offline Android-capable plate OCR solution and a minimal integration contract.
+### Frozen OCR selection
 
-Prefer an existing lightweight offline Latin OCR solution over custom training if it is usable and legally suitable.
+Engine:
 
-Deferred unless a real blocker appears:
+`Google ML Kit Text Recognition v2 — Latin bundled model`
 
-- custom OCR training from scratch
-- broad OCR model comparison
-- sophisticated grammar engines
+Android artifact:
+
+`com.google.mlkit:text-recognition:16.0.1`
+
+MVP properties:
+
+- on-device OCR
+- bundled Latin model
+- no cloud OCR dependency
+- Latin letters A-Z and digits 0-9
+- no custom OCR model training required for MVP
+
+### Frozen OCR preprocessing
+
+```text
+PlateDetection
+-> plate crop
+-> if crop height >= 32 px: use original crop
+-> if crop height < 32 px: upscale to 96 px height preserving aspect ratio
+-> ML Kit Latin OCR
+```
+
+Not required for MVP:
+
+- adaptive thresholding
+- aggressive contrast enhancement
+- perspective correction
+- deskew
+- country grammar
+- aggressive character substitutions
 - multi-frame OCR voting
-- extensive augmentation/benchmark studies
+
+### OCR validation
+
+Validation set:
+
+- 50 manually reviewed public plate crops
+- 8 Romanian public samples
+- 42 ELPD samples
+- no private AVAX site imagery
+
+Frozen V4 result:
+
+- normalized exact matches: `35 / 50`
+- normalized exact accuracy: `70.00%`
+- total ground-truth characters: `369`
+- total edit distance: `23`
+- character error rate: `6.23%`
+- character accuracy: `93.77%`
+- empty OCR results: `0`
+
+Romanian subset:
+
+- exact normalized: `4 / 8`
+- accuracy: `50.00%`
+
+ELPD subset:
+
+- exact normalized: `31 / 42`
+- accuracy: `73.81%`
+
+Main observed weakness:
+
+- overexposed plate crops
+
+Known OCR confusion examples include O/0, C/G, B/8, missing characters, and W/N/A confusion.
+
+These limitations are accepted for the accelerated MVP because manual plate entry remains available as fallback.
+
+Android OCR latency remains to be measured during `MOB-AI-WP-002`.
+
+### AI-WP-002 reference commits
+
+Substantive OCR validation/handoff commit:
+
+`64872bf2b0e709f56c30eba1e778ae352af076a2`
+
+Final reference-record commit:
+
+`793861816076cbdd6f3b36e21192e0824b922de0`
+
+The final reference commit is confirmed present in `petru-carp30/AVAX-ALPR-AI`.
+
+Non-blocking documentation issue:
+
+- the final handoff-reference commit introduced character-encoding/mojibake on some em-dash characters in `AI/PlateOCR/documentation/AI-WP-002-MASTER-HANDOFF.md`;
+- this does not affect OCR code/results or block mobile integration;
+- documentation encoding cleanup is deferred unless it causes repository tooling problems.
 
 ## MOB-AI-WP-002 — OCR + Automatic Local Verification Pipeline
 
 - Priority: `P0`
-- Status: `TODO / BLOCKED ONLY ON OCR CONTRACT`
+- Status: `TODO / READY TO START`
 - Target project: AVAX ALPR – Guard Mobile App
 
-Satisfied dependency:
+Dependencies:
 
 - `MOB-AI-WP-001 — DONE`
-
-Remaining dependency:
-
-- usable `AI-WP-002` OCR engine/contract
+- `AI-WP-002 — DONE`
 
 Target flow:
 
@@ -204,16 +241,22 @@ Target flow:
 CameraFrame
 -> PlateDetection
 -> plate crop
--> OCR
+-> ML Kit OCR
 -> PlateNormalizer
 -> Room local lookup
 -> AccessChecker
--> access result
+-> Access Result
 -> existing local access log
 -> existing background sync
 ```
 
-Manual plate entry remains the fallback if automatic OCR fails.
+Required MVP behavior:
+
+- manual plate entry remains fallback
+- duplicate automatic events are suppressed with a simple cooldown
+- OCR failure must not crash or invent text
+- no plate crop persistence/upload
+- existing access decision logic is reused; AI/OCR does not decide access
 
 ## Confirmed completed foundation
 
@@ -233,6 +276,7 @@ Manual plate entry remains the fallback if automatic OCR fails.
 | AI-DATA-WP-001 | Detector Dataset Foundation | P0 | DONE |
 | AI-WP-001 | Detector Baseline & Mobile Export Contract | P0 | DONE |
 | MOB-AI-WP-001 | On-device Detector Integration | P0 | DONE |
+| AI-WP-002 | OCR MVP Baseline & Mobile Contract | P0 | DONE |
 
 ## Production follow-up not required to finish app MVP
 
@@ -248,7 +292,13 @@ Deferred work remains documented in:
 
 `documentation/DEFERRED_SCOPE.md`
 
-This includes detector optimization, quantization/runtime comparisons, advanced tracking/overlay, broad device testing, AVAX field-domain adaptation, Manager/Admin workflows, analytics, Sync v2, schema cleanup, and deeper deployment/observability work.
+This includes detector optimization, quantization/runtime comparisons, advanced tracking/overlay, broad device testing, AVAX field-domain adaptation, custom OCR training, advanced OCR preprocessing/grammar, Manager/Admin workflows, analytics, Sync v2, schema cleanup, and deeper deployment/observability work.
+
+## Documentation sync follow-up
+
+Before external/pilot distribution, official documentation should add the selected ML Kit OCR dependency and applicable Google ML Kit / Google APIs terms to the project third-party/dependency notices.
+
+This documentation sync does not block `MOB-AI-WP-002` development.
 
 ## MVP release gate
 
