@@ -85,6 +85,50 @@ For a clearly visible test plate under reasonable conditions, target at least 8 
 
 If the confirmation gate still rarely reaches the correct plate, the next action is a **narrow OCR stabilization patch**, not broad OCR research. The patch may investigate only low-complexity input-quality improvements such as crop selection/padding, crop resolution/upscaling, and simple exposure/contrast handling. Changing OCR engine, custom training, fuzzy lookup, grammar rules, and broad preprocessing experiments remain deferred unless that narrow patch also fails.
 
+## CAM-WP-002 — Manual Camera Zoom Controls
+
+- Priority: `P1 High`
+- Status: `TODO / APPROVED FOR ACCELERATED MVP`
+- Target project: AVAX ALPR – Guard Mobile App
+
+Field testing on the Pixel 6 Pro showed that manual camera zoom is operationally useful when license plates are distant and occupy too few pixels in the frame.
+
+Master decision:
+
+- include manual camera zoom in the Accelerated MVP;
+- implement it as a separate focused mobile feature;
+- do not mix its logic with OCR stabilization;
+- it may be implemented in parallel while `MOB-AI-WP-002` OCR stabilization continues;
+- it must not block the current OCR correctness fix unless integration reveals a real regression.
+
+Required MVP behavior:
+
+- pinch-to-zoom directly on CameraX preview;
+- provide a simple `1x` reset control;
+- an optional `2x` quick control is allowed only if trivial and uncluttered;
+- use CameraX `CameraControl` / `CameraInfo.zoomState`;
+- respect the actual camera min/max zoom range;
+- no detector/OCR image-cropping hack for zoom;
+- no auto-zoom;
+- detector and OCR continue consuming CameraX analysis frames under zoom;
+- bounding-box mapping remains correct;
+- autofocus/exposure continue functioning;
+- camera remains the central uncluttered UI element.
+
+No changes are authorized to Room, access decisions, access logging, backend/API, PlateNormalizer, OCR confirmation, scene re-arm, duplicate cooldown, detector model, or OCR engine.
+
+Required physical validation on Pixel 6 Pro:
+
+- pinch-to-zoom PASS;
+- reset to `1x` PASS where supported by camera zoom range;
+- stable preview PASS;
+- detector continues detecting PASS;
+- bounding-box mapping remains correct PASS;
+- OCR continues receiving zoomed analysis frames PASS;
+- no regression in automatic verification PASS;
+- minimize/resume PASS;
+- camera permission handling unchanged PASS.
+
 ## Completed AI/mobile foundation
 
 | ID | Work item | Priority | Status |
@@ -143,6 +187,8 @@ Camera
 ```
 
 An unconfirmed OCR candidate must not create an authoritative automatic UNKNOWN VEHICLE decision/log.
+
+Manual zoom is an approved usability aid for distant plates but does not change access-decision semantics.
 
 ## Governance
 
