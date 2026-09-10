@@ -75,15 +75,72 @@ Existing controls remain:
 
 This exception is intentionally narrow. It does not authorize fuzzy database lookup, plate grammar, O/0-B/8-S/5 substitutions, object tracking, OCR retraining, custom OCR, perspective correction, API changes, or database changes.
 
+## Master decision — native OCR crop quality gate
+
+Physical stabilization diagnostics confirmed that native crop resolution is a material OCR-quality boundary.
+
+Observed controlled results for plate `B208GAB`:
+
+- native crop `79x40` -> OCR input `253x128` -> correct;
+- native crop `94x50` -> OCR input `241x128` -> correct;
+- native crop `142x74` -> no upscale -> correct;
+- native crop `57x28` -> OCR input `261x128` -> incorrect;
+- native crop around `47x25` -> detector still sees the plate but OCR is not reliably confirmable.
+
+Current narrow preprocessing under test:
+
+```text
+native crop height < 64 px
+-> upscale to 128 px height preserving aspect ratio
+```
+
+Master decision:
+
+**APPROVED for Accelerated MVP**
+
+Authoritative automatic OCR must now enforce this minimum quality gate before verification/logging:
+
+```text
+native crop height < 32 px
+-> OCR input considered LOW QUALITY
+-> do not perform authoritative automatic local verification
+-> do not create automatic access log
+-> continue scanning
+-> prompt operator to move closer or use manual zoom
+```
+
+Important semantics:
+
+- the threshold uses **native plate crop height before any upscale**;
+- upscaling does not convert a sub-32 px native crop into a trusted crop;
+- detector success alone is not sufficient to authorize OCR-based access verification;
+- this quality gate applies before 2-of-3 OCR confirmation;
+- sub-32 px native crops must not participate as authoritative confirmation candidates;
+- manual plate entry remains available;
+- manual camera zoom is the preferred operational aid for distant plates.
+
+The approved safety sequence is now:
+
+```text
+PlateDetection
+-> native crop
+-> if native height < 32 px: LOW QUALITY / retry / zoom / manual fallback
+-> otherwise apply current OCR resize rule where needed
+-> ML Kit OCR
+-> 2-of-3 normalized confirmation
+-> local verification
+-> exactly one access log
+```
+
+This decision does not authorize character substitutions, fuzzy lookup, country grammar, access-rule changes, custom OCR, OCR-engine changes, API changes, or database changes.
+
 ## OCR quality decision
 
-The 2-of-3 confirmation gate is required first because it prevents one unstable OCR frame from becoming an authoritative false decision/log.
-
-However, confirmation alone is not assumed to solve OCR quality. After implementing the confirmation gate, physical testing must measure whether the automatic flow is actually usable.
+The quality gate and 2-of-3 confirmation protect correctness, but physical validation must still measure whether the automatic flow is operationally useful.
 
 For a clearly visible test plate under reasonable conditions, target at least 8 correct automatic confirmations across 10 independent presentations. This is an Accelerated MVP field target, not a research benchmark.
 
-If the confirmation gate still rarely reaches the correct plate, the next action is a **narrow OCR stabilization patch**, not broad OCR research. The patch may investigate only low-complexity input-quality improvements such as crop selection/padding, crop resolution/upscaling, and simple exposure/contrast handling. Changing OCR engine, custom training, fuzzy lookup, grammar rules, and broad preprocessing experiments remain deferred unless that narrow patch also fails.
+If correct confirmation remains below that target for native crops at or above the quality gate, continue only the already approved narrow OCR stabilization work. Broad OCR research remains deferred.
 
 ## CAM-WP-002 — Manual Camera Zoom Controls
 
@@ -149,7 +206,9 @@ Accepted OCR baseline:
 
 - Google ML Kit Text Recognition v2 Latin bundled model
 - `com.google.mlkit:text-recognition:16.0.1`
-- selective upscale: crop height < 32 px -> 96 px height
+- original validation baseline selective upscale: crop height < 32 px -> 96 px height
+- current mobile narrow stabilization under test: native crop height < 64 px -> 128 px height
+- authoritative automatic verification safety gate: native crop height < 32 px -> reject as low quality
 
 ## Existing completed application foundation
 
@@ -160,7 +219,7 @@ Accepted OCR baseline:
 | MOB-WP-003 | Background Access Log Upload | DONE |
 | CAM-WP-001 | CameraX Foundation | DONE |
 
-Manual plate verification remains the mandatory fallback while automatic OCR is uncertain.
+Manual plate verification remains the mandatory fallback while automatic OCR is uncertain or below the native crop quality gate.
 
 ## Production follow-up
 
@@ -177,6 +236,7 @@ The accelerated MVP is functionally complete only after physical-device validati
 ```text
 Camera
 -> detects plate
+-> native plate crop passes minimum quality gate
 -> OCR candidate becomes sufficiently confirmed
 -> PlateNormalizer normalizes it
 -> Room lookup works offline
@@ -186,7 +246,7 @@ Camera
 -> pending event can sync when connectivity returns
 ```
 
-An unconfirmed OCR candidate must not create an authoritative automatic UNKNOWN VEHICLE decision/log.
+A sub-32 px native crop or unconfirmed OCR candidate must not create an authoritative automatic UNKNOWN VEHICLE decision/log.
 
 Manual zoom is an approved usability aid for distant plates but does not change access-decision semantics.
 
