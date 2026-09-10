@@ -145,46 +145,68 @@ If correct confirmation remains below that target for native crops at or above t
 ## CAM-WP-002 — Manual Camera Zoom Controls
 
 - Priority: `P1 High`
-- Status: `TODO / APPROVED FOR ACCELERATED MVP`
+- Status: `DONE`
 - Target project: AVAX ALPR – Guard Mobile App
 
-Field testing on the Pixel 6 Pro showed that manual camera zoom is operationally useful when license plates are distant and occupy too few pixels in the frame.
+Master accepted the physical-device handoff.
 
-Master decision:
+Implemented:
 
-- include manual camera zoom in the Accelerated MVP;
-- implement it as a separate focused mobile feature;
-- do not mix its logic with OCR stabilization;
-- it may be implemented in parallel while `MOB-AI-WP-002` OCR stabilization continues;
-- it must not block the current OCR correctness fix unless integration reveals a real regression.
+- CameraX zoom through `CameraControl.setZoomRatio(...)`;
+- live zoom state through `CameraInfo.zoomState`;
+- dynamic `minZoomRatio` / `maxZoomRatio` handling without hard-coded device limits;
+- pinch-to-zoom directly on `PreviewView`;
+- zoom request derived from current zoom ratio multiplied by gesture scale factor;
+- safe clamping through `CameraZoomMath`;
+- compact manual zoom slider and visible zoom indication;
+- `1x` reset control;
+- Preview and ImageAnalysis remain bound together during zoom;
+- lifecycle-safe camera reference handling;
+- no detector/OCR architecture changes and no crop-based fake zoom.
 
-Required MVP behavior:
+Physical target device:
 
-- pinch-to-zoom directly on CameraX preview;
-- provide a simple `1x` reset control;
-- an optional `2x` quick control is allowed only if trivial and uncluttered;
-- use CameraX `CameraControl` / `CameraInfo.zoomState`;
-- respect the actual camera min/max zoom range;
-- no detector/OCR image-cropping hack for zoom;
+`Google Pixel 6 Pro`
+
+Observed supported maximum zoom in the tested CameraX configuration:
+
+- approximately `13.5x`
+
+Physical validation passed:
+
+- zoom increase/decrease;
+- `1x` reset without instability;
+- detector while zoomed;
+- bounding-box alignment while zoomed;
+- OCR receiving/processing zoomed plate crop;
+- automatic verification pipeline without regression;
+- minimize/resume with safe/default zoom state;
+- camera permission flow unchanged;
+- manual plate fallback unchanged.
+
+Field testing confirmed the intended benefit: manual zoom increased distant plate bbox/crop size and enabled successful OCR where the unzoomed plate occupied too few native pixels.
+
+Automated validation:
+
+- `CameraZoomMathTest` — `5/5 PASS`;
+- `./gradlew testDebugUnitTest` — BUILD SUCCESSFUL;
+- `./gradlew assembleDebug` — BUILD SUCCESSFUL;
+- `git diff --cached --check` — clean before commit.
+
+Reference Guard commit:
+
+`b48300345f86212efaf4a94b2f42f7280a24818d`
+
+Commit message:
+
+`feat(camera): add manual CameraX zoom controls`
+
+Known accepted MVP limitations:
+
 - no auto-zoom;
-- detector and OCR continue consuming CameraX analysis frames under zoom;
-- bounding-box mapping remains correct;
-- autofocus/exposure continue functioning;
-- camera remains the central uncluttered UI element.
-
-No changes are authorized to Room, access decisions, access logging, backend/API, PlateNormalizer, OCR confirmation, scene re-arm, duplicate cooldown, detector model, or OCR engine.
-
-Required physical validation on Pixel 6 Pro:
-
-- pinch-to-zoom PASS;
-- reset to `1x` PASS where supported by camera zoom range;
-- stable preview PASS;
-- detector continues detecting PASS;
-- bounding-box mapping remains correct PASS;
-- OCR continues receiving zoomed analysis frames PASS;
-- no regression in automatic verification PASS;
-- minimize/resume PASS;
-- camera permission handling unchanged PASS.
+- no dedicated/advanced zoom UI;
+- exact previous zoom ratio is not persisted across lifecycle/process recreation;
+- compact slider is intentionally temporary and may be redesigned with the future Guard camera UI.
 
 ## Completed AI/mobile foundation
 
@@ -194,6 +216,7 @@ Required physical validation on Pixel 6 Pro:
 | AI-WP-001 | Detector Baseline & Mobile Export Contract | P0 | DONE |
 | MOB-AI-WP-001 | On-device Detector Integration | P0 | DONE |
 | AI-WP-002 | OCR MVP Baseline & Mobile Contract | P0 | DONE |
+| CAM-WP-002 | Manual Camera Zoom Controls | P1 | DONE |
 
 Accepted detector:
 
@@ -248,7 +271,7 @@ Camera
 
 A sub-32 px native crop or unconfirmed OCR candidate must not create an authoritative automatic UNKNOWN VEHICLE decision/log.
 
-Manual zoom is an approved usability aid for distant plates but does not change access-decision semantics.
+Manual zoom is an accepted usability aid for distant plates but does not change access-decision semantics.
 
 ## Governance
 
