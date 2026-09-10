@@ -1,6 +1,6 @@
 # AVAX ALPR Project Status
 
-**Status snapshot:** 2026-09-09  
+**Status snapshot:** 2026-09-10  
 **Source of truth:** AVAX ALPR Master Plan & Current Status
 
 ## Delivery mode
@@ -9,11 +9,9 @@ Project delivery is operating in **ACCELERATED MVP MODE**.
 
 Goal: finish the first usable Guard ALPR application as quickly as possible, accepting an approximately 80% solution if the core operational flow works reliably.
 
-Deferred/non-essential work is preserved in:
+Deferred/non-essential work is preserved in `documentation/DEFERRED_SCOPE.md`.
 
-`documentation/DEFERRED_SCOPE.md`
-
-Core accelerated MVP flow:
+Core MVP flow:
 
 ```text
 CameraX
@@ -30,275 +28,103 @@ The system remains offline-first. AI does not decide access.
 
 ## Current critical path
 
-Detector and OCR foundation are both complete.
+`MOB-AI-WP-002 — OCR + Automatic Local Verification Pipeline`
 
-Remaining critical path:
-
-```text
-MOB-AI-WP-002 — OCR + Automatic Local Verification Pipeline
-        ↓
-Physical end-to-end MVP validation
-        ↓
-Bug-fix only until MVP acceptance
-```
-
-## AI detector status
-
-### AI-DATA-WP-001 — Detector Dataset Foundation
-
-- Priority: `P0`
-- Status: `DONE`
-- Accepted dataset: `AI/PlateDetector/datasets/derived/baseline_v1`
-- 8916 images
-- 8412 positives
-- 504 audited real negatives
-- 11580 plate instances
-- TRAIN 7622 / VAL 625 / TEST 669
-- source-group leakage 0
-- exact-pixel leakage 0
-- unresolved near-duplicate candidates 0
-
-### AI-WP-001 — Detector Baseline & Mobile Export Contract
-
-- Priority: `P0`
-- Status: `DONE`
-
-Frozen detector:
-
-- architecture: `YOLOX-Nano`
-- input: `512x512`
-- selected epoch: `60`
-- confidence threshold: `0.225`
-- NMS threshold: `0.45`
-
-Final TEST one-shot:
-
-- mAP@0.50:0.95: `0.450475`
-- mAP@0.50: `0.812652`
-- Precision: `0.824503`
-- Recall: `0.817287`
-- F1: `0.820879`
-
-Accepted ONNX artifact:
-
-`avax_plate_detector_yolox_nano_512_v1.onnx`
-
-- opset: `17`
-- size: `3,703,049 bytes`
-- SHA256: `B42313FE76EFCD98332430A25FE6BEEC553FC5FE7633957917453836AEA81793`
-
-Reference AI commit:
-
-`5d2e1022d924a8b364b86882b9d4d57c94b652cc`
-
-## MOB-AI-WP-001 — On-device Detector Integration
-
-- Priority: `P0`
-- Status: `DONE`
+- Priority: `P0 Critical`
+- Status: `IN PROGRESS / OCR STABILITY FIX REQUIRED`
 - Target project: AVAX ALPR – Guard Mobile App
 
-Accepted mobile detector integration:
+Physical-device testing confirmed that single-frame OCR is not reliable enough to be treated as authoritative for automatic local verification/logging. A stable detector can produce different OCR strings for the same visible plate across presentations.
 
-- ONNX Runtime Android
-- exact accepted detector artifact validation
-- frozen preprocessing/postprocessing contract implemented
-- original CameraFrame coordinates returned
-- manual fallback preserved
-- no raw-frame persistence/upload
+The previously implemented scene re-arm gate is accepted:
 
-Physical target device:
+- one visible physical plate no longer creates repeated access events;
+- automatic scanning re-arms after approximately 1500 ms continuously without plate detections;
+- existing 10-second same-normalized-plate cooldown remains active.
 
-`Google Pixel 6 Pro`
+## Master decision — minimal multi-frame OCR confirmation
 
-Observed offline performance:
+A narrowly scoped exception to the previously deferred temporal OCR logic is **APPROVED** because physical testing demonstrated a real correctness blocker.
 
-- model load: approximately `107–150 ms`
-- model inference: approximately `151–210 ms`
-- total preprocessing + inference + postprocessing: approximately `383–554 ms/frame`
-- observed cadence: approximately `1.8–2.6 fps`
-
-Reference Guard commit:
-
-`4ee903de9ab823312c98263bbb7cd22938277e92`
-
-## AI-WP-002 — OCR MVP Baseline & Mobile Contract
-
-- Priority: `P0`
-- Status: `DONE`
-- Target project: AVAX ALPR – AI Model
-
-Master accepted the OCR MVP handoff for accelerated integration.
-
-### Frozen OCR selection
-
-Engine:
-
-`Google ML Kit Text Recognition v2 — Latin bundled model`
-
-Android artifact:
-
-`com.google.mlkit:text-recognition:16.0.1`
-
-MVP properties:
-
-- on-device OCR
-- bundled Latin model
-- no cloud OCR dependency
-- Latin letters A-Z and digits 0-9
-- no custom OCR model training required for MVP
-
-### Frozen OCR preprocessing
+Approved MVP behavior:
 
 ```text
-PlateDetection
--> plate crop
--> if crop height >= 32 px: use original crop
--> if crop height < 32 px: upscale to 96 px height preserving aspect ratio
--> ML Kit Latin OCR
+Plate detected
+-> collect up to 3 usable OCR results over approximately 1.2–1.5 seconds
+-> normalize each OCR candidate
+-> accept only when the same normalized plate appears at least 2 times
+-> perform exactly one local verification
+-> create exactly one access log
+-> lock the current scene
 ```
 
-Not required for MVP:
-
-- adaptive thresholding
-- aggressive contrast enhancement
-- perspective correction
-- deskew
-- country grammar
-- aggressive character substitutions
-- multi-frame OCR voting
-
-### OCR validation
-
-Validation set:
-
-- 50 manually reviewed public plate crops
-- 8 Romanian public samples
-- 42 ELPD samples
-- no private AVAX site imagery
-
-Frozen V4 result:
-
-- normalized exact matches: `35 / 50`
-- normalized exact accuracy: `70.00%`
-- total ground-truth characters: `369`
-- total edit distance: `23`
-- character error rate: `6.23%`
-- character accuracy: `93.77%`
-- empty OCR results: `0`
-
-Romanian subset:
-
-- exact normalized: `4 / 8`
-- accuracy: `50.00%`
-
-ELPD subset:
-
-- exact normalized: `31 / 42`
-- accuracy: `73.81%`
-
-Main observed weakness:
-
-- overexposed plate crops
-
-Known OCR confusion examples include O/0, C/G, B/8, missing characters, and W/N/A confusion.
-
-These limitations are accepted for the accelerated MVP because manual plate entry remains available as fallback.
-
-Android OCR latency remains to be measured during `MOB-AI-WP-002`.
-
-### AI-WP-002 reference commits
-
-Substantive OCR validation/handoff commit:
-
-`64872bf2b0e709f56c30eba1e778ae352af076a2`
-
-Final reference-record commit:
-
-`793861816076cbdd6f3b36e21192e0824b922de0`
-
-The final reference commit is confirmed present in `petru-carp30/AVAX-ALPR-AI`.
-
-Non-blocking documentation issue:
-
-- the final handoff-reference commit introduced character-encoding/mojibake on some em-dash characters in `AI/PlateOCR/documentation/AI-WP-002-MASTER-HANDOFF.md`;
-- this does not affect OCR code/results or block mobile integration;
-- documentation encoding cleanup is deferred unless it causes repository tooling problems.
-
-## MOB-AI-WP-002 — OCR + Automatic Local Verification Pipeline
-
-- Priority: `P0`
-- Status: `TODO / READY TO START`
-- Target project: AVAX ALPR – Guard Mobile App
-
-Dependencies:
-
-- `MOB-AI-WP-001 — DONE`
-- `AI-WP-002 — DONE`
-
-Target flow:
+If 3 usable OCR results are obtained without 2-of-3 agreement:
 
 ```text
-CameraFrame
--> PlateDetection
--> plate crop
--> ML Kit OCR
--> PlateNormalizer
--> Room local lookup
--> AccessChecker
--> Access Result
--> existing local access log
--> existing background sync
+OCR uncertain
+-> do not create automatic UNKNOWN VEHICLE
+-> do not create an automatic access log
+-> do not lock the scene as successfully verified
+-> continue/retry or allow manual entry
 ```
 
-Required MVP behavior:
+Existing controls remain:
 
-- manual plate entry remains fallback
-- duplicate automatic events are suppressed with a simple cooldown
-- OCR failure must not crash or invent text
-- no plate crop persistence/upload
-- existing access decision logic is reused; AI/OCR does not decide access
+- re-arm after approximately 1500 ms continuously without detections;
+- 10-second same-normalized-plate cooldown as secondary duplicate protection.
 
-## Confirmed completed foundation
+This exception is intentionally narrow. It does not authorize fuzzy database lookup, plate grammar, O/0-B/8-S/5 substitutions, object tracking, OCR retraining, custom OCR, perspective correction, API changes, or database changes.
+
+## OCR quality decision
+
+The 2-of-3 confirmation gate is required first because it prevents one unstable OCR frame from becoming an authoritative false decision/log.
+
+However, confirmation alone is not assumed to solve OCR quality. After implementing the confirmation gate, physical testing must measure whether the automatic flow is actually usable.
+
+For a clearly visible test plate under reasonable conditions, target at least 8 correct automatic confirmations across 10 independent presentations. This is an Accelerated MVP field target, not a research benchmark.
+
+If the confirmation gate still rarely reaches the correct plate, the next action is a **narrow OCR stabilization patch**, not broad OCR research. The patch may investigate only low-complexity input-quality improvements such as crop selection/padding, crop resolution/upscaling, and simple exposure/contrast handling. Changing OCR engine, custom training, fuzzy lookup, grammar rules, and broad preprocessing experiments remain deferred unless that narrow patch also fails.
+
+## Completed AI/mobile foundation
 
 | ID | Work item | Priority | Status |
 |---|---|---:|---|
-| BE-001 | Backend Baseline Audit & Build Validation | P0 | DONE |
-| SEC-001 | Resolve NU1903 Microsoft.OpenApi Vulnerability | P0 | DONE |
-| BE-002 | Validate Existing SQL Schema Relevant to ALPR | P0 | DONE |
-| DEVDB-001 | Local SQLite Development Database Baseline | P1 | DONE |
-| BE-WP-001 | Local Backend Vehicle Read API Foundation | P0 | DONE |
-| BE-WP-002 | Vehicle Snapshot Sync API v1 | P0 | DONE |
-| MOB-WP-001 | Offline Vehicle Cache & Manual Access Verification | P0 | DONE |
-| MOB-WP-002 | Local Access Logging Foundation | P0 | DONE |
-| BE-WP-003 | Access Log Ingestion API v1 | P0 | DONE |
-| MOB-WP-003 | Background Access Log Upload | P0 | DONE |
-| CAM-WP-001 | CameraX Foundation | P0 | DONE |
 | AI-DATA-WP-001 | Detector Dataset Foundation | P0 | DONE |
 | AI-WP-001 | Detector Baseline & Mobile Export Contract | P0 | DONE |
 | MOB-AI-WP-001 | On-device Detector Integration | P0 | DONE |
 | AI-WP-002 | OCR MVP Baseline & Mobile Contract | P0 | DONE |
 
-## Production follow-up not required to finish app MVP
+Accepted detector:
+
+- YOLOX-Nano 512
+- confidence `0.225`
+- NMS `0.45`
+- ONNX Runtime Android
+
+Accepted OCR baseline:
+
+- Google ML Kit Text Recognition v2 Latin bundled model
+- `com.google.mlkit:text-recognition:16.0.1`
+- selective upscale: crop height < 32 px -> 96 px height
+
+## Existing completed application foundation
+
+| ID | Work item | Status |
+|---|---|---|
+| MOB-WP-001 | Offline Vehicle Cache & Manual Access Verification | DONE |
+| MOB-WP-002 | Local Access Logging Foundation | DONE |
+| MOB-WP-003 | Background Access Log Upload | DONE |
+| CAM-WP-001 | CameraX Foundation | DONE |
+
+Manual plate verification remains the mandatory fallback while automatic OCR is uncertain.
+
+## Production follow-up
 
 `BE-WP-004 — SQL Server Access Log Persistence & Controlled Deployment`
 
 - Status: `TODO`
 - Priority: `P0 before production`
-- Not a blocker for finishing the Guard automatic ALPR MVP
-
-## Deferred scope
-
-Deferred work remains documented in:
-
-`documentation/DEFERRED_SCOPE.md`
-
-This includes detector optimization, quantization/runtime comparisons, advanced tracking/overlay, broad device testing, AVAX field-domain adaptation, custom OCR training, advanced OCR preprocessing/grammar, Manager/Admin workflows, analytics, Sync v2, schema cleanup, and deeper deployment/observability work.
-
-## Documentation sync follow-up
-
-Before external/pilot distribution, official documentation should add the selected ML Kit OCR dependency and applicable Google ML Kit / Google APIs terms to the project third-party/dependency notices.
-
-This documentation sync does not block `MOB-AI-WP-002` development.
+- Does not block completion of the on-device Guard MVP.
 
 ## MVP release gate
 
@@ -307,14 +133,16 @@ The accelerated MVP is functionally complete only after physical-device validati
 ```text
 Camera
 -> detects plate
--> OCR returns plate text
+-> OCR candidate becomes sufficiently confirmed
 -> PlateNormalizer normalizes it
 -> Room lookup works offline
 -> AccessChecker returns local decision
 -> result is shown clearly
--> access event is stored locally
--> pending access event can sync when connectivity returns
+-> exactly one access event is stored for the confirmed scan
+-> pending event can sync when connectivity returns
 ```
+
+An unconfirmed OCR candidate must not create an authoritative automatic UNKNOWN VEHICLE decision/log.
 
 ## Governance
 
