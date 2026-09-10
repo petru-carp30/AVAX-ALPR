@@ -37,12 +37,35 @@ The system remains offline-first. AI still never decides access.
 - private AVAX field-image collection/domain adaptation
 - extensive detector error taxonomy beyond what is needed to identify blockers
 - additional synthetic-data experiments
+- custom OCR training
+- broad OCR-engine comparisons
+- country-specific plate grammar
+- aggressive character substitution rules such as O/0, B/8, S/5
+- fuzzy database lookup to compensate for OCR errors
+- extensive OCR preprocessing studies
+- perspective correction/deskew unless later field evidence makes it necessary
+
+### OCR temporal-processing exception promoted into MVP
+
+General multi-frame OCR fusion/voting remains deferred, **except** for one narrowly scoped correctness safeguard promoted into `MOB-AI-WP-002` after physical-device testing exposed unstable single-frame OCR.
+
+Approved MVP exception:
+
+```text
+collect up to 3 usable OCR candidates
+-> require the same normalized result at least 2 times
+-> only then perform one automatic verification/log
+```
+
+If there is no 2-of-3 agreement, the scan remains uncertain and must not create an automatic `UNKNOWN VEHICLE` decision/log.
+
+This exception is a safety/correctness gate, not a general temporal-recognition system. Object tracking, long-window voting, sophisticated fusion, and predictive candidate correction remain deferred.
 
 ## Guard Mobile — deferred after end-to-end automatic ALPR works
 
 - production-quality animated bounding-box overlay
 - object tracking between frames
-- temporal smoothing/voting across long frame sequences
+- sophisticated temporal smoothing/fusion beyond the approved minimal 2-of-3 OCR confirmation gate
 - sophisticated adaptive frame-rate/inference scheduling
 - multi-device performance matrix
 - landscape-specific camera tuning unless required by actual use
@@ -91,6 +114,7 @@ Not deferred:
 - no direct Guard-to-SQL connectivity
 - no AI-based access decision
 - no raw camera-frame persistence/upload unless explicitly authorized
+- preventing uncertain OCR from creating authoritative automatic access decisions/logs
 
 ## Re-entry rule
 
