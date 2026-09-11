@@ -180,6 +180,53 @@ Implemented/validated:
 
 Observed tested maximum zoom: approximately `13.5x`.
 
+## CAM-WP-003 — Focus Assist After Zoom
+
+- Priority: `P1 High`
+- Status: `TODO / APPROVED FOR ACCELERATED MVP`
+- Target project: AVAX ALPR – Guard Mobile App
+
+Physical field testing after CAM-WP-002 showed that increased zoom can leave a distant plate visibly out of focus, reducing OCR quality even when the plate occupies more native pixels.
+
+Master decision:
+
+- add a narrow CameraX focus-assist feature for zoomed plate scanning;
+- keep it isolated from OCR/access logic;
+- do not implement custom Camera2 focus algorithms;
+- preserve normal autofocus/auto-exposure behavior;
+- complete this before the final zoom-assisted OCR acceptance run.
+
+Preferred MVP behavior:
+
+1. keep the camera's normal continuous autofocus behavior;
+2. when a zoom gesture/slider change finishes and the camera settles, request a CameraX focus/metering action near the center of the preview;
+3. allow tap-to-focus on the preview as an operator fallback;
+4. use CameraX `CameraControl.startFocusAndMetering(...)` with `FocusMeteringAction` / preview metering points;
+5. include AF and AE metering where supported;
+6. use a short auto-cancel/reset period so focus is not permanently locked;
+7. no focus logic may block `ImageAnalysis`, detector, OCR, lifecycle recovery, or manual verification.
+
+No changes are authorized to:
+
+- detector model/threshold/NMS;
+- OCR engine/preprocessing/2-of-3 confirmation;
+- native crop quality gate;
+- Room / AccessChecker / access logging;
+- backend/API/database;
+- scene re-arm or 10-second cooldown.
+
+Required Pixel 6 Pro validation:
+
+- zoom to a distant plate and verify refocus improves visible sharpness;
+- detector continues under focus action;
+- bounding boxes remain aligned;
+- OCR still receives analysis frames;
+- tap-to-focus works;
+- focus-assist does not freeze preview;
+- minimize/resume remains stable;
+- 1x zoom/reset remains functional;
+- camera permission behavior unchanged.
+
 ## Completed AI/mobile foundation
 
 | ID | Work item | Priority | Status |
