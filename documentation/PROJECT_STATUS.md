@@ -1,15 +1,11 @@
 # AVAX ALPR Project Status
 
-**Status snapshot:** 2026-09-10  
+**Status snapshot:** 2026-09-11  
 **Source of truth:** AVAX ALPR Master Plan & Current Status
 
 ## Delivery mode
 
 Project delivery is operating in **ACCELERATED MVP MODE**.
-
-Goal: finish the first usable Guard ALPR application as quickly as possible, accepting an approximately 80% solution if the core operational flow works reliably.
-
-Deferred/non-essential work is preserved in `documentation/DEFERRED_SCOPE.md`.
 
 Core MVP flow:
 
@@ -28,185 +24,161 @@ The system remains offline-first. AI does not decide access.
 
 ## Current critical path
 
-`MOB-AI-WP-002 — OCR + Automatic Local Verification Pipeline`
+### MOB-AI-WP-002 — OCR + Automatic Local Verification Pipeline
 
 - Priority: `P0 Critical`
-- Status: `IN PROGRESS / OCR STABILITY FIX REQUIRED`
+- Status: `IN PROGRESS / MASTER REVIEW — CHANGES REQUIRED`
 - Target project: AVAX ALPR – Guard Mobile App
 
-Physical-device testing confirmed that single-frame OCR is not reliable enough to be treated as authoritative for automatic local verification/logging. A stable detector can produce different OCR strings for the same visible plate across presentations.
+Reference Guard commit under review:
 
-The previously implemented scene re-arm gate is accepted:
+`4babeba79f995cd81632f1cc17f77be2025a76e6`
 
-- one visible physical plate no longer creates repeated access events;
-- automatic scanning re-arms after approximately 1500 ms continuously without plate detections;
-- existing 10-second same-normalized-plate cooldown remains active.
+Commit message:
 
-## Master decision — minimal multi-frame OCR confirmation
+`feat(ocr): integrate OCR pipeline and native crop quality gate`
 
-A narrowly scoped exception to the previously deferred temporal OCR logic is **APPROVED** because physical testing demonstrated a real correctness blocker.
+### Accepted implementation from current handoff
 
-Approved MVP behavior:
+The following behavior is accepted as implemented/tested evidence:
 
-```text
-Plate detected
--> collect up to 3 usable OCR results over approximately 1.2–1.5 seconds
--> normalize each OCR candidate
--> accept only when the same normalized plate appears at least 2 times
--> perform exactly one local verification
--> create exactly one access log
--> lock the current scene
-```
+- original-frame plate crop;
+- native crop quality gate;
+- `native crop height < 32 px` rejected as low quality;
+- `32 <= native crop height < 64 px` resized to 128 px height preserving aspect ratio;
+- native crop `>= 64 px` used without required resize;
+- Google ML Kit Latin OCR;
+- 2-of-3 normalized OCR confirmation;
+- no authoritative automatic verification/log when OCR does not confirm;
+- `AutomaticScanRearmGate` with approximately 1500 ms no-detection re-arm;
+- existing 10-second same-normalized-plate cooldown preserved;
+- lifecycle reset of scan/OCR confirmation state while preserving duplicate cooldown;
+- manual verification fallback unchanged;
+- no API, database, backend, or access-decision rule changes.
 
-If 3 usable OCR results are obtained without 2-of-3 agreement:
+Physical evidence accepted from Pixel 6 Pro:
 
-```text
-OCR uncertain
--> do not create automatic UNKNOWN VEHICLE
--> do not create an automatic access log
--> do not lock the scene as successfully verified
--> continue/retry or allow manual entry
-```
+- sub-32 px crop correctly rejected without automatic event;
+- 32–63 px crop correctly upscaled and confirmed;
+- >=64 px crop correctly processed natively and confirmed;
+- manual verification fallback PASS;
+- background/minimize/screen-lock/resume PASS;
+- duplicate automatic-log suppression PASS.
 
-Existing controls remain:
+### Master review blockers before DONE
 
-- re-arm after approximately 1500 ms continuously without detections;
-- 10-second same-normalized-plate cooldown as secondary duplicate protection.
+`MOB-AI-WP-002` is **not DONE yet** for three concrete reasons.
 
-This exception is intentionally narrow. It does not authorize fuzzy database lookup, plate grammar, O/0-B/8-S/5 substitutions, object tracking, OCR retraining, custom OCR, perspective correction, API changes, or database changes.
+#### 1. ML Kit dependency scope must support non-debug builds
 
-## Master decision — native OCR crop quality gate
-
-Physical stabilization diagnostics confirmed that native crop resolution is a material OCR-quality boundary.
-
-Observed controlled results for plate `B208GAB`:
-
-- native crop `79x40` -> OCR input `253x128` -> correct;
-- native crop `94x50` -> OCR input `241x128` -> correct;
-- native crop `142x74` -> no upscale -> correct;
-- native crop `57x28` -> OCR input `261x128` -> incorrect;
-- native crop around `47x25` -> detector still sees the plate but OCR is not reliably confirmable.
-
-Current narrow preprocessing under test:
+At reference commit `4babeba79f995cd81632f1cc17f77be2025a76e6`, `app/build.gradle.kts` declares:
 
 ```text
-native crop height < 64 px
--> upscale to 128 px height preserving aspect ratio
+debugImplementation("com.google.mlkit:text-recognition:16.0.1")
 ```
 
-Master decision:
+The production `main` source set contains the ML Kit OCR implementation, so the OCR runtime dependency must not be debug-only.
 
-**APPROVED for Accelerated MVP**
-
-Authoritative automatic OCR must now enforce this minimum quality gate before verification/logging:
+Required correction:
 
 ```text
-native crop height < 32 px
--> OCR input considered LOW QUALITY
--> do not perform authoritative automatic local verification
--> do not create automatic access log
--> continue scanning
--> prompt operator to move closer or use manual zoom
+implementation("com.google.mlkit:text-recognition:16.0.1")
 ```
 
-Important semantics:
+Then validate at minimum:
 
-- the threshold uses **native plate crop height before any upscale**;
-- upscaling does not convert a sub-32 px native crop into a trusted crop;
-- detector success alone is not sufficient to authorize OCR-based access verification;
-- this quality gate applies before 2-of-3 OCR confirmation;
-- sub-32 px native crops must not participate as authoritative confirmation candidates;
-- manual plate entry remains available;
-- manual camera zoom is the preferred operational aid for distant plates.
+```text
+./gradlew testDebugUnitTest
+./gradlew assembleDebug
+./gradlew assembleRelease
+```
 
-The approved safety sequence is now:
+A release/pilot build must compile with OCR available.
+
+#### 2. Required 10-presentation OCR field validation is still missing
+
+Master previously required a controlled test using one clearly visible plate across **10 independent presentations** after the 2-of-3 confirmation and quality-gate changes.
+
+Required report:
+
+- OCR candidates per presentation;
+- final confirmed result;
+- correct / incorrect / unconfirmed;
+- total correct confirmations;
+- total incorrect confirmations;
+- total unconfirmed.
+
+Accelerated MVP target:
+
+`>= 8 / 10 correct confirmed scans`
+
+This is a field acceptance target, not an AI research benchmark.
+
+If result is below 8/10, continue only the already approved narrow OCR stabilization work.
+
+#### 3. Final offline-to-online access-log sync acceptance must be demonstrated
+
+The final automatic workflow must be physically demonstrated as:
+
+```text
+Internet OFF
+-> automatic confirmed plate
+-> Room local lookup
+-> AccessChecker local decision
+-> exactly one local access event stored
+-> Internet ON
+-> pending event synchronizes through existing background sync
+```
+
+No new backend work is required; this is regression/acceptance validation of the existing path.
+
+## Approved OCR safety architecture
 
 ```text
 PlateDetection
--> native crop
--> if native height < 32 px: LOW QUALITY / retry / zoom / manual fallback
--> otherwise apply current OCR resize rule where needed
+-> original-frame native crop
+-> native quality gate
+-> optional resize
 -> ML Kit OCR
--> 2-of-3 normalized confirmation
--> local verification
--> exactly one access log
+-> normalize OCR candidate
+-> 2-of-3 confirmation
+-> PlateNormalizer
+-> Room lookup
+-> AccessChecker
+-> access result
+-> exactly one local access log
+-> existing background sync
 ```
 
-This decision does not authorize character substitutions, fuzzy lookup, country grammar, access-rule changes, custom OCR, OCR-engine changes, API changes, or database changes.
+Safety rules:
 
-## OCR quality decision
-
-The quality gate and 2-of-3 confirmation protect correctness, but physical validation must still measure whether the automatic flow is operationally useful.
-
-For a clearly visible test plate under reasonable conditions, target at least 8 correct automatic confirmations across 10 independent presentations. This is an Accelerated MVP field target, not a research benchmark.
-
-If correct confirmation remains below that target for native crops at or above the quality gate, continue only the already approved narrow OCR stabilization work. Broad OCR research remains deferred.
+- sub-32 px native crop cannot create authoritative automatic verification/logging;
+- unconfirmed OCR cannot create automatic `UNKNOWN VEHICLE` or access log;
+- OCR never decides access;
+- no fuzzy lookup, grammar, character substitutions, custom OCR, or OCR retraining are authorized for MVP.
 
 ## CAM-WP-002 — Manual Camera Zoom Controls
 
 - Priority: `P1 High`
 - Status: `DONE`
-- Target project: AVAX ALPR – Guard Mobile App
 
-Master accepted the physical-device handoff.
-
-Implemented:
-
-- CameraX zoom through `CameraControl.setZoomRatio(...)`;
-- live zoom state through `CameraInfo.zoomState`;
-- dynamic `minZoomRatio` / `maxZoomRatio` handling without hard-coded device limits;
-- pinch-to-zoom directly on `PreviewView`;
-- zoom request derived from current zoom ratio multiplied by gesture scale factor;
-- safe clamping through `CameraZoomMath`;
-- compact manual zoom slider and visible zoom indication;
-- `1x` reset control;
-- Preview and ImageAnalysis remain bound together during zoom;
-- lifecycle-safe camera reference handling;
-- no detector/OCR architecture changes and no crop-based fake zoom.
-
-Physical target device:
-
-`Google Pixel 6 Pro`
-
-Observed supported maximum zoom in the tested CameraX configuration:
-
-- approximately `13.5x`
-
-Physical validation passed:
-
-- zoom increase/decrease;
-- `1x` reset without instability;
-- detector while zoomed;
-- bounding-box alignment while zoomed;
-- OCR receiving/processing zoomed plate crop;
-- automatic verification pipeline without regression;
-- minimize/resume with safe/default zoom state;
-- camera permission flow unchanged;
-- manual plate fallback unchanged.
-
-Field testing confirmed the intended benefit: manual zoom increased distant plate bbox/crop size and enabled successful OCR where the unzoomed plate occupied too few native pixels.
-
-Automated validation:
-
-- `CameraZoomMathTest` — `5/5 PASS`;
-- `./gradlew testDebugUnitTest` — BUILD SUCCESSFUL;
-- `./gradlew assembleDebug` — BUILD SUCCESSFUL;
-- `git diff --cached --check` — clean before commit.
-
-Reference Guard commit:
+Accepted reference Guard commit:
 
 `b48300345f86212efaf4a94b2f42f7280a24818d`
 
-Commit message:
+Implemented/validated:
 
-`feat(camera): add manual CameraX zoom controls`
+- CameraX `CameraControl.setZoomRatio(...)`;
+- `CameraInfo.zoomState`;
+- pinch-to-zoom;
+- compact slider and current zoom indication;
+- `1x` reset;
+- dynamic min/max zoom handling;
+- detector/OCR continue under zoom;
+- bounding-box alignment remains correct;
+- physical Pixel 6 Pro validation passed.
 
-Known accepted MVP limitations:
-
-- no auto-zoom;
-- no dedicated/advanced zoom UI;
-- exact previous zoom ratio is not persisted across lifecycle/process recreation;
-- compact slider is intentionally temporary and may be redesigned with the future Guard camera UI.
+Observed tested maximum zoom: approximately `13.5x`.
 
 ## Completed AI/mobile foundation
 
@@ -216,33 +188,11 @@ Known accepted MVP limitations:
 | AI-WP-001 | Detector Baseline & Mobile Export Contract | P0 | DONE |
 | MOB-AI-WP-001 | On-device Detector Integration | P0 | DONE |
 | AI-WP-002 | OCR MVP Baseline & Mobile Contract | P0 | DONE |
+| CAM-WP-001 | CameraX Foundation | P0 | DONE |
 | CAM-WP-002 | Manual Camera Zoom Controls | P1 | DONE |
-
-Accepted detector:
-
-- YOLOX-Nano 512
-- confidence `0.225`
-- NMS `0.45`
-- ONNX Runtime Android
-
-Accepted OCR baseline:
-
-- Google ML Kit Text Recognition v2 Latin bundled model
-- `com.google.mlkit:text-recognition:16.0.1`
-- original validation baseline selective upscale: crop height < 32 px -> 96 px height
-- current mobile narrow stabilization under test: native crop height < 64 px -> 128 px height
-- authoritative automatic verification safety gate: native crop height < 32 px -> reject as low quality
-
-## Existing completed application foundation
-
-| ID | Work item | Status |
-|---|---|---|
-| MOB-WP-001 | Offline Vehicle Cache & Manual Access Verification | DONE |
-| MOB-WP-002 | Local Access Logging Foundation | DONE |
-| MOB-WP-003 | Background Access Log Upload | DONE |
-| CAM-WP-001 | CameraX Foundation | DONE |
-
-Manual plate verification remains the mandatory fallback while automatic OCR is uncertain or below the native crop quality gate.
+| MOB-WP-001 | Offline Vehicle Cache & Manual Access Verification | P0 | DONE |
+| MOB-WP-002 | Local Access Logging Foundation | P0 | DONE |
+| MOB-WP-003 | Background Access Log Upload | P0 | DONE |
 
 ## Production follow-up
 
@@ -254,24 +204,22 @@ Manual plate verification remains the mandatory fallback while automatic OCR is 
 
 ## MVP release gate
 
-The accelerated MVP is functionally complete only after physical-device validation of:
+The accelerated Guard MVP is accepted only after physical validation of:
 
 ```text
 Camera
--> detects plate
--> native plate crop passes minimum quality gate
--> OCR candidate becomes sufficiently confirmed
--> PlateNormalizer normalizes it
--> Room lookup works offline
--> AccessChecker returns local decision
--> result is shown clearly
--> exactly one access event is stored for the confirmed scan
--> pending event can sync when connectivity returns
+-> detector
+-> native crop quality gate
+-> confirmed OCR
+-> PlateNormalizer
+-> Room lookup offline
+-> AccessChecker local decision
+-> clear result
+-> exactly one local event
+-> background sync after connectivity returns
 ```
 
-A sub-32 px native crop or unconfirmed OCR candidate must not create an authoritative automatic UNKNOWN VEHICLE decision/log.
-
-Manual zoom is an accepted usability aid for distant plates but does not change access-decision semantics.
+Manual plate entry remains fallback for uncertain OCR or insufficient native crop quality.
 
 ## Governance
 
@@ -280,4 +228,3 @@ Manual zoom is an accepted usability aid for distant plates but does not change 
 - AI never decides access.
 - Guard Mobile never connects directly to SQL Server.
 - Manager/Admin server-side communication passes through Backend API.
-- Minimum physical-device validation of the automatic end-to-end ALPR flow remains mandatory before calling the accelerated MVP complete.
