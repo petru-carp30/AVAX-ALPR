@@ -219,16 +219,40 @@ Master decision:
 
 BE-WP-004 is **not DONE** because the required target-environment validation has not occurred.
 
+## Host application integration ownership
+
+The future integration of the accepted AVAX ALPR Guard capability into the larger Android application is **outside the current implementation scope of this project**.
+
+Integration execution is intentionally handed off to the user's manager / owner of the larger host application.
+
+Therefore:
+
+- `MOB-INT-WP-001 — Extract Guard ALPR as Host-Integrable Android Feature` is **not opened as an active project task**;
+- no integration refactor should be performed now;
+- no module extraction, package moves, host navigation changes, host DI changes, or host database changes should be made in the standalone Guard repository for speculative integration;
+- the accepted standalone Guard baseline must remain available as the reference implementation;
+- `documentation/GUARD_CODEBASE_MAP.md` and `documentation/GUARD_INTEGRATION_GUIDE.md` are handoff/reference material for the manager who performs the integration later;
+- `BE-WP-004` should be revisited by that integration owner only if the final host architecture still requires the standalone central ALPR log persistence path.
+
 ## Current project direction
 
-The next major development direction is integration of the accepted Guard ALPR functionality into the larger host Android application.
+There is currently **no mandatory active implementation work package** after the accepted Guard MVP within the user's current execution scope.
 
-Preparation documentation exists in:
+The project remains in:
 
-- `documentation/GUARD_CODEBASE_MAP.md`
-- `documentation/GUARD_INTEGRATION_GUIDE.md`
+```text
+Guard MVP: ACCEPTED / CLOSED
+Guard baseline: BUG FIX ONLY
+Host integration: HANDED OFF TO MANAGER
+BE-WP-004 target deployment: DEFERRED TO HOST INTEGRATION IF STILL REQUIRED
+```
 
-The host-integration implementation work package should be opened only after the host application repository/architecture is available for review.
+New development should begin only for:
+
+- a real bug discovered in the accepted Guard baseline;
+- a newly approved requirement;
+- a measured field issue that justifies reopening deferred AI/mobile work;
+- a future request from the host-integration owner.
 
 ## Governance
 
