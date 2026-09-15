@@ -178,22 +178,63 @@ The Guard application now enters **BUG FIX ONLY** mode for the accepted MVP base
 | MOB-WP-003 | Background Access Log Upload | P0 | DONE |
 | MVP-E2E-WP-001 | Accelerated MVP End-to-End Acceptance & Blocker Fixes | P0 | DONE |
 
-## Next project priority
+## BE-WP-004 — SQL Server Access Log Persistence & Controlled Deployment
 
-`BE-WP-004 — SQL Server Access Log Persistence & Controlled Deployment`
-
-- Status: `TODO`
-- Priority: `P0 before production`
+- Priority: `P0 if central production access-log persistence is required`
+- Status: `BLOCKED / DEFERRED TO HOST INTEGRATION`
 - Target project: AVAX ALPR – Backend & Database
 
-This is the next production-readiness blocker after Guard MVP acceptance.
+Reference backend commit:
 
-After BE-WP-004, continue with production/security/deployment preparation and then the deferred Manager / Access Request flow according to Master priority.
+`fee402af683f8c740663dd0cf33075965b092f30`
+
+Implementation prepared and locally validated:
+
+- SQL Server persistence support for `POST /api/access-logs`;
+- `Microsoft.Data.SqlClient` integration;
+- `SqlServerAccessLogConnectionFactory`;
+- environment-based `ConnectionStrings:AccessLogSqlServer` configuration;
+- deployment script `ALPR/Database/BE-WP-004_Create_AVAX_ALPR_ACCESS_LOGS.sql`;
+- database-level duplicate handling for SQL Server duplicate-key errors;
+- existing `201 Stored` / `200 AlreadyStored` / `409 Conflict` API semantics preserved;
+- automated backend suite: `43/43` passed;
+- package vulnerability scan: no vulnerable packages reported.
+
+Not completed:
+
+- deployment against the manager-controlled central SQL Server;
+- write/DDL validation in the target environment;
+- central smoke test proving first insert / identical retry / conflicting duplicate against the real SQL Server table.
+
+Reason:
+
+The current developer access to the central database is read-only. No unauthorized DDL or test writes are permitted.
+
+Master decision:
+
+- do not treat this as forgotten unfinished work;
+- preserve the implementation and deployment script;
+- resume the controlled SQL Server deployment only when the ALPR feature is integrated into the larger host application and the approved backend/service account, connection string, and SQL permissions are available;
+- if the host application does not require central ALPR access-log storage, that requirement must be explicitly re-evaluated during integration rather than silently deploying an unused table.
+
+BE-WP-004 is **not DONE** because the required target-environment validation has not occurred.
+
+## Current project direction
+
+The next major development direction is integration of the accepted Guard ALPR functionality into the larger host Android application.
+
+Preparation documentation exists in:
+
+- `documentation/GUARD_CODEBASE_MAP.md`
+- `documentation/GUARD_INTEGRATION_GUIDE.md`
+
+The host-integration implementation work package should be opened only after the host application repository/architecture is available for review.
 
 ## Governance
 
 - Only Master-confirmed implementation and validation may be marked `DONE`.
 - Deferred does not mean cancelled.
+- Blocked work must preserve its blocker explicitly rather than being treated as complete.
 - AI never decides access.
 - Guard Mobile never connects directly to SQL Server.
 - Manager/Admin server-side communication passes through Backend API.
