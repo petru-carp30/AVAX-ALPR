@@ -1,50 +1,42 @@
 # AVAX ALPR Project Status
 
-**Status snapshot:** 2026-09-14  
+**Status snapshot:** 2026-09-15  
 **Source of truth:** AVAX ALPR Master Plan & Current Status
 
 ## Delivery mode
 
-Project delivery is operating in **ACCELERATED MVP MODE**.
+Project delivery has completed the **ACCELERATED MVP** acceptance cycle for the Guard Mobile application.
 
-Core Guard flow:
+The core Guard flow is now Master-accepted on the physical target device:
 
 ```text
 CameraX
--> License Plate Detector
--> OCR
--> Plate Normalization
--> Local Room Lookup
--> Access Decision
+-> Manual Zoom / Focus Assist
+-> YOLOX Plate Detector
+-> Original-frame Plate Crop
+-> Native Crop Quality Gate
+-> Google ML Kit OCR
+-> 2-of-3 OCR Confirmation
+-> PlateNormalizer
+-> Room Local Lookup
+-> AccessChecker
+-> Access Result
 -> Local Access Log
--> Background Access Log Sync
+-> WorkManager Background Sync
+-> ASP.NET Core API
+-> SQL Server
 ```
 
 The system remains offline-first. AI does not decide access.
 
-## Current critical path
-
-The core automatic Guard ALPR pipeline and camera usability foundation are now physically validated on the target device.
-
-Next immediate work package:
-
-`MVP-E2E-WP-001 — Accelerated MVP End-to-End Acceptance & Blocker Fixes`
-
-Mode:
-
-`FINAL ACCEPTANCE / BUG FIX ONLY`
-
-No new feature scope should be introduced unless a measured blocker requires Master approval.
-
-## MOB-AI-WP-002 — OCR + Automatic Local Verification Pipeline
+## MVP-E2E-WP-001 — Accelerated MVP End-to-End Acceptance & Blocker Fixes
 
 - Priority: `P0 Critical`
 - Status: `DONE`
 - Target project: AVAX ALPR – Guard Mobile App
+- Master acceptance date: `2026-09-15`
 
-Master accepted the final physical-device handoff on 2026-09-14.
-
-Final Guard reference commit:
+Final Guard baseline:
 
 `984d99a9cd3ceb0bd04d41ea8063db4de7954a71`
 
@@ -52,224 +44,122 @@ Commit message:
 
 `fix(ai): improve OCR pipeline runtime performance`
 
-### Final accepted automatic flow
+The repository was reported clean and synchronized with `origin/master`; no additional code changes were required during final acceptance.
 
-```text
-CameraX
--> YOLOX detector
--> original-frame native plate crop
--> native crop quality gate
--> optional OCR resize
--> Google ML Kit OCR
--> normalized OCR candidate
--> 2-of-3 confirmation
--> PlateNormalizer
--> Room local lookup
--> AccessChecker
--> access result
--> durable local access log
--> WorkManager background synchronization
-```
+### Physical acceptance target
 
-Manual plate verification remains available as fallback.
+- Device: `Google Pixel 6 Pro`
+- Android: `17`
+- API: `37`
 
-### OCR runtime dependency
+### Build acceptance
 
-Accepted dependency:
-
-`com.google.mlkit:text-recognition:16.0.1`
-
-The dependency is declared with normal `implementation(...)` scope and is available to non-debug builds.
-
-Final build validation:
+All final build gates passed:
 
 - `testDebugUnitTest` — BUILD SUCCESSFUL
 - `assembleDebug` — BUILD SUCCESSFUL
 - `assembleRelease` — BUILD SUCCESSFUL
 
-### OCR quality and confirmation safety
+### Final physical acceptance scenarios
+
+All required A–N scenarios passed:
+
+- clean application start;
+- known vehicle / Granted;
+- known vehicle / Denied;
+- genuine unknown vehicle after confirmed OCR;
+- low-quality distant crop rejection;
+- manual CameraX zoom;
+- focus assist after zoom;
+- same vehicle continuously visible without repeated logs;
+- vehicle leaves / next vehicle re-arm flow;
+- minimize / resume recovery;
+- offline access decision;
+- connectivity recovery and background synchronization;
+- offline application restart;
+- manual plate-entry fallback.
+
+No unresolved P0/P1 blocker was identified during the final acceptance pass.
+
+### Accepted OCR/access behavior
+
+Examples from final physical validation:
+
+- `B173AVX` -> confirmed OCR -> Room -> `GRANTED`;
+- `B30KRP` -> OCR candidates `B30KRA / B30KRP / B30KRP` -> confirmed `B30KRP` -> `DENIED`;
+- `SV5660C` -> confirmed 2-of-3 -> local lookup miss -> `UNKNOWN VEHICLE`;
+- native crop approximately `35x17 px` -> `Plate too far - move closer or zoom` -> no authoritative automatic decision/log.
+
+The 2-of-3 gate therefore demonstrated both positive confirmation and rejection/recovery from individual bad OCR candidates without character substitution or grammar rules.
+
+### Duplicate protection acceptance
+
+A confirmed plate remained continuously visible for more than one minute without repeated automatic access-log spam.
+
+Accepted protections remain:
+
+- scene lock after successful automatic processing;
+- re-arm after approximately 1500 ms continuously without plate detections;
+- existing 10-second same-normalized-plate cooldown as secondary protection.
+
+### Zoom/focus acceptance
+
+Manual zoom increased native plate crop size materially during field testing, for example from approximately `35x17` at 1x to approximately `202x96` at 5.6x.
+
+Focus assist remained stable and did not freeze Preview, detector, or OCR processing.
+
+A small visual delay at the start of slider movement is accepted as non-blocking MVP behavior.
+
+### Offline-first acceptance
+
+Final physical acceptance confirmed that access decisions continue without backend connectivity and after application restart.
+
+Observed flow:
 
 ```text
-native height < 32 px
--> reject as LOW QUALITY
--> no authoritative automatic verification/logging
-
-32 <= native height < 64 px
--> resize to 128 px height preserving aspect ratio
--> OCR allowed
-
-native height >= 64 px
--> use native crop
--> OCR allowed
-```
-
-Automatic OCR must be confirmed using the accepted 2-of-3 rule before local verification/logging.
-
-If no 2-of-3 agreement is reached:
-
-- no authoritative automatic verification;
-- no automatic `UNKNOWN VEHICLE` event;
-- no automatic access log;
-- scanner remains able to retry.
-
-No character substitutions, plate grammar, fuzzy lookup, custom OCR, perspective correction, long-window voting, or object tracking were introduced.
-
-### 10-presentation physical OCR acceptance
-
-Target device: `Google Pixel 6 Pro`
-
-Physical plate: `B173AVX`
-
-Result:
-
-- correct confirmations: `10 / 10`
-- incorrect confirmations: `0 / 10`
-- unconfirmed: `0 / 10`
-
-Accelerated MVP acceptance target was `>= 8 / 10` correct confirmed scans.
-
-Result: `PASS`
-
-### Runtime/performance acceptance
-
-Representative observed performance after runtime improvements:
-
-- detector total processing as low as approximately `256 ms`;
-- detector cadence up to approximately `3.9 fps`;
-- OCR latency approximately `103–280 ms` in fast cases.
-
-Regression tests passed for:
-
-- same vehicle continuously visible without duplicate logs;
-- vehicle leaves -> scanner re-arms -> next vehicle processes normally;
-- minimize/resume without stale scene state;
-- 2-of-3 confirmation;
-- approximately 1500 ms scene re-arm;
-- existing 10-second same-normalized-plate cooldown;
-- native crop quality gate;
-- crop/upscale behavior.
-
-Further performance optimization is not required for the current Accelerated MVP scope.
-
-### Offline-first end-to-end acceptance
-
-Validated physical scenario:
-
-```text
-Internet OFF
--> Camera
--> Detector
--> native crop quality gate
--> OCR
--> 2-of-3 confirmation
--> PlateNormalizer
--> Room local lookup
+Backend unavailable
+-> Camera / Manual Input
+-> OCR / PlateNormalizer
+-> Room
 -> AccessChecker
--> GRANTED local decision
+-> local result
 -> local access event PENDING
-
-Internet ON
--> existing WorkManager sync
--> local event SYNCED
--> exactly one server row for mobileEventId
 ```
 
-Accepted result:
+After connectivity/backend recovery:
 
-- local access decision without server dependency: `PASS`
-- local acceptance event count: `1`
-- initial state: `PENDING`
-- background synchronization: `PASS`
-- final local state: `SYNCED`
-- central row count for the event UUID: `1`
-- duplicate count: `0`
+```text
+PENDING
+-> WorkManager upload
+-> SYNCED
+```
 
-No API contract, database schema, backend contract, or access-rule changes were introduced by MOB-AI-WP-002.
+Final Room inspection reported:
 
-## CAM-WP-002 — Manual Camera Zoom Controls
+- `183` synchronized access-log rows;
+- duplicate query by `localLogId` returned `0 rows`.
 
-- Priority: `P1 High`
-- Status: `DONE`
+A separate server-side count for a specific `mobileEventId` was not rerun during this final acceptance round. This is accepted as non-blocking because the same Guard/backend baseline had already passed explicit server-side idempotency validation during the preceding MOB-AI-WP-002 acceptance, including one central row for the tested event UUID.
 
-Accepted reference Guard commit:
+### Data and architecture safety
 
-`b48300345f86212efaf4a94b2f42f7280a24818d`
+Accepted boundaries remain:
 
-Implemented/validated:
+- raw camera frames are not part of normal persistence;
+- raw camera frames are not uploaded;
+- OCR crops are not persisted as normal application data;
+- Guard Mobile does not connect directly to SQL Server;
+- AI does not decide access;
+- `AccessChecker` remains the local access authority;
+- Backend API remains the server-side synchronization boundary.
 
-- CameraX `CameraControl.setZoomRatio(...)`;
-- `CameraInfo.zoomState`;
-- pinch-to-zoom;
-- compact slider and current zoom indication;
-- `1x` reset;
-- dynamic min/max zoom handling;
-- detector/OCR continue under zoom;
-- bounding-box alignment remains correct;
-- physical Pixel 6 Pro validation passed.
+## Accelerated Guard MVP milestone
 
-Observed tested maximum zoom: approximately `13.5x`.
+**Status: ACCEPTED / CLOSED**
 
-## CAM-WP-003 — Focus Assist After Zoom
+The first automatic offline-first AVAX ALPR Guard MVP is now validated end to end on the primary physical target device.
 
-- Priority: `P1 High`
-- Status: `DONE`
-- Target project: AVAX ALPR – Guard Mobile App
-
-Master accepted the formal handoff on 2026-09-14.
-
-Reference implementation commit:
-
-`5fb84a887e9ed1747378d3cb2fd78e6da1a0ca84`
-
-Commit message:
-
-`feat(camera): add focus assist after zoom`
-
-The implementation remains present in the later Guard baseline headed by:
-
-`984d99a9cd3ceb0bd04d41ea8063db4de7954a71`
-
-Accepted implementation:
-
-- CameraX `FocusMeteringAction` integration;
-- center refocus after zoom interaction settles;
-- tap-to-focus using `PreviewView.meteringPointFactory`;
-- AF metering;
-- AE metering when supported by the device;
-- 3-second auto-cancel so focus is not permanently locked;
-- normal CameraX continuous autofocus behavior preserved;
-- Preview and ImageAnalysis remain bound;
-- no detector/OCR/access-logic coupling.
-
-Physical validation on Google Pixel 6 Pro confirmed:
-
-- zoom remains functional;
-- detector continues processing during/after focus operations;
-- bounding boxes remain mapped correctly;
-- OCR continues receiving native plate crops;
-- no preview freeze caused by focus assist;
-- `1x` reset remains functional;
-- minimize/resume remains stable;
-- later automatic OCR acceptance/runtime validation passed with focus assist already integrated;
-- final automatic OCR field validation achieved `10/10` correct independent plate confirmations.
-
-Build evidence:
-
-- `testDebugUnitTest` — BUILD SUCCESSFUL
-- `assembleDebug` — BUILD SUCCESSFUL
-- later final Guard baseline `assembleRelease` — BUILD SUCCESSFUL
-
-Accepted limitation:
-
-At extreme zoom, visible degradation can be caused by optical/digital zoom limits and cannot be fully corrected by autofocus. This is not considered an MVP blocker.
-
-No custom Camera2 focus algorithm, manual focus-distance control, permanent focus lock, auto-zoom, or object tracking was introduced.
-
-API contract changes: `NONE`
-
-Database changes: `NONE`
-
-Backend changes: `NONE`
+The Guard application now enters **BUG FIX ONLY** mode for the accepted MVP baseline unless Master explicitly opens a new feature work package.
 
 ## Completed AI/mobile foundation
 
@@ -286,20 +176,19 @@ Backend changes: `NONE`
 | MOB-WP-001 | Offline Vehicle Cache & Manual Access Verification | P0 | DONE |
 | MOB-WP-002 | Local Access Logging Foundation | P0 | DONE |
 | MOB-WP-003 | Background Access Log Upload | P0 | DONE |
+| MVP-E2E-WP-001 | Accelerated MVP End-to-End Acceptance & Blocker Fixes | P0 | DONE |
 
-## Production follow-up
+## Next project priority
 
 `BE-WP-004 — SQL Server Access Log Persistence & Controlled Deployment`
 
 - Status: `TODO`
 - Priority: `P0 before production`
-- Does not block completion of the on-device Guard MVP.
+- Target project: AVAX ALPR – Backend & Database
 
-## Accelerated MVP acceptance state
+This is the next production-readiness blocker after Guard MVP acceptance.
 
-All currently identified implementation work packages required for the Guard automatic MVP pipeline are Master-accepted as `DONE`.
-
-The next step is `MVP-E2E-WP-001`, a final acceptance/regression pass in **BUG FIX ONLY** mode. Its purpose is to verify the assembled MVP as a whole, not to introduce new functionality.
+After BE-WP-004, continue with production/security/deployment preparation and then the deferred Manager / Access Request flow according to Master priority.
 
 ## Governance
 
@@ -308,3 +197,4 @@ The next step is `MVP-E2E-WP-001`, a final acceptance/regression pass in **BUG F
 - AI never decides access.
 - Guard Mobile never connects directly to SQL Server.
 - Manager/Admin server-side communication passes through Backend API.
+- New Guard features require a new Master-approved work package; the accepted MVP baseline is now bug-fix only.
