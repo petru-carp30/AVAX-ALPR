@@ -1,13 +1,13 @@
 # AVAX ALPR Project Status
 
-**Status snapshot:** 2026-09-15  
+**Status snapshot:** 2026-09-16  
 **Source of truth:** AVAX ALPR Master Plan & Current Status
 
 ## Delivery mode
 
 Project delivery has completed the **ACCELERATED MVP** acceptance cycle for the Guard Mobile application.
 
-The core Guard flow is now Master-accepted on the physical target device:
+The core Guard flow is Master-accepted on the physical target device:
 
 ```text
 CameraX
@@ -36,15 +36,13 @@ The system remains offline-first. AI does not decide access.
 - Target project: AVAX ALPR – Guard Mobile App
 - Master acceptance date: `2026-09-15`
 
-Final Guard baseline:
+Final accepted standalone Guard baseline:
 
 `984d99a9cd3ceb0bd04d41ea8063db4de7954a71`
 
 Commit message:
 
 `fix(ai): improve OCR pipeline runtime performance`
-
-The repository was reported clean and synchronized with `origin/master`; no additional code changes were required during final acceptance.
 
 ### Physical acceptance target
 
@@ -90,11 +88,7 @@ Examples from final physical validation:
 - `SV5660C` -> confirmed 2-of-3 -> local lookup miss -> `UNKNOWN VEHICLE`;
 - native crop approximately `35x17 px` -> `Plate too far - move closer or zoom` -> no authoritative automatic decision/log.
 
-The 2-of-3 gate therefore demonstrated both positive confirmation and rejection/recovery from individual bad OCR candidates without character substitution or grammar rules.
-
 ### Duplicate protection acceptance
-
-A confirmed plate remained continuously visible for more than one minute without repeated automatic access-log spam.
 
 Accepted protections remain:
 
@@ -104,11 +98,7 @@ Accepted protections remain:
 
 ### Zoom/focus acceptance
 
-Manual zoom increased native plate crop size materially during field testing, for example from approximately `35x17` at 1x to approximately `202x96` at 5.6x.
-
-Focus assist remained stable and did not freeze Preview, detector, or OCR processing.
-
-A small visual delay at the start of slider movement is accepted as non-blocking MVP behavior.
+Manual zoom materially increased native plate crop size during field testing. Focus assist remained stable and did not freeze Preview, detector, or OCR processing.
 
 ### Offline-first acceptance
 
@@ -139,7 +129,7 @@ Final Room inspection reported:
 - `183` synchronized access-log rows;
 - duplicate query by `localLogId` returned `0 rows`.
 
-A separate server-side count for a specific `mobileEventId` was not rerun during this final acceptance round. This is accepted as non-blocking because the same Guard/backend baseline had already passed explicit server-side idempotency validation during the preceding MOB-AI-WP-002 acceptance, including one central row for the tested event UUID.
+A separate server-side count for a specific `mobileEventId` was not rerun during this final acceptance round. This is accepted as non-blocking because the same Guard/backend baseline had already passed explicit server-side idempotency validation during the preceding MOB-AI-WP-002 acceptance.
 
 ### Data and architecture safety
 
@@ -157,9 +147,100 @@ Accepted boundaries remain:
 
 **Status: ACCEPTED / CLOSED**
 
-The first automatic offline-first AVAX ALPR Guard MVP is now validated end to end on the primary physical target device.
+The first automatic offline-first AVAX ALPR Guard MVP is validated end to end on the primary physical target device.
 
-The Guard application now enters **BUG FIX ONLY** mode for the accepted MVP baseline unless Master explicitly opens a new feature work package.
+The accepted `master` baseline remains the safe reference. New presentation work is isolated on a dedicated feature branch until explicitly merged.
+
+## MOB-UX-WP-001 — Camera-First Guard Operator UI
+
+- Priority: `P1 High`
+- Status: `DONE`
+- Target project: AVAX ALPR – Guard Mobile App
+- Master acceptance date: `2026-09-16`
+- Guard branch: `feature/guard-operator-ui`
+- Reference commit: `4c8b2a4a2dcd7d158c1f6773c3cc652a775a9eb9`
+- Commit message: `feat(ui): add camera-first guard operator view`
+- Merge status: `NOT MERGED`
+
+Master review confirmed that the feature branch is exactly one commit ahead of the accepted `master` baseline `984d99a9cd3ceb0bd04d41ea8063db4de7954a71` and modifies only the expected Android UI/camera composition files.
+
+### Accepted operator UX
+
+Implemented and physically validated:
+
+- camera-first Operator View;
+- compact access-area selector over the camera;
+- debug-only `DEV` entry preserving the existing Developer View;
+- shared editable license-plate field for OCR and manual correction;
+- OCR does not overwrite the plate field while the operator is actively editing;
+- manual Search reuses the existing local verification path;
+- `Edit Plate` and `Continue` workflows;
+- operator result overlay for Granted / Denied / Unknown outcomes;
+- vehicle brand/model, color and notes shown where available;
+- unknown vehicles do not fabricate vehicle information;
+- current access-status color semantics preserved;
+- fullscreen camera permission fallback;
+- existing detector overlay, pinch zoom, 1x reset, tap-to-focus and focus assist preserved;
+- compact vertical zoom control for fullscreen operator use;
+- access-area change preserves the current plate candidate for explicit re-check without creating an unintended automatic access event.
+
+### Physical validation
+
+Device:
+
+`Google Pixel 6 Pro`
+
+Confirmed:
+
+- fullscreen camera remains operational;
+- vertical and pinch zoom work;
+- focus behavior remains functional;
+- Granted / Denied / Unknown presentation works;
+- access-area selector works;
+- Developer View remains accessible in debug workflow;
+- background/resume works;
+- OCR -> Edit Plate -> manual correction -> Search works;
+- OCR does not overwrite active manual input;
+- same continuously visible vehicle remains protected from duplicate automatic events;
+- removing the plate rearms scanning;
+- reintroducing the plate allows a new automatic verification;
+- area change does not create an unintended automatic event.
+
+Observed manual-edit isolation example:
+
+```text
+Automatic: B30KRP -> DENIED
+Manual edit while plate remains visible: B30KRR -> UNKNOWN VEHICLE
+Plate removed and presented again: B30KRP -> DENIED
+```
+
+### Build validation
+
+- `testDebugUnitTest` — PASS
+- `assembleDebug` — PASS
+- `assembleRelease` — PASS
+- `git diff --check` — PASS
+
+### Architecture impact
+
+No new architecture layer was introduced. Operator View is built on the existing `GuardViewModel` and repository/domain verification pipeline.
+
+No changes were made to:
+
+- detector model or thresholds;
+- OCR engine or algorithm;
+- crop quality gate;
+- 2-of-3 confirmation;
+- `PlateNormalizer`;
+- Room lookup rules;
+- `AccessChecker`;
+- scene re-arm or cooldown semantics;
+- access logging;
+- WorkManager synchronization;
+- backend APIs;
+- Room schema/migrations.
+
+Driver metadata/photos remain intentionally out of scope and are candidates for separate follow-up work.
 
 ## Completed AI/mobile foundation
 
@@ -177,6 +258,7 @@ The Guard application now enters **BUG FIX ONLY** mode for the accepted MVP base
 | MOB-WP-002 | Local Access Logging Foundation | P0 | DONE |
 | MOB-WP-003 | Background Access Log Upload | P0 | DONE |
 | MVP-E2E-WP-001 | Accelerated MVP End-to-End Acceptance & Blocker Fixes | P0 | DONE |
+| MOB-UX-WP-001 | Camera-First Guard Operator UI | P1 | DONE |
 
 ## BE-WP-004 — SQL Server Access Log Persistence & Controlled Deployment
 
@@ -212,54 +294,42 @@ The current developer access to the central database is read-only. No unauthoriz
 
 Master decision:
 
-- do not treat this as forgotten unfinished work;
 - preserve the implementation and deployment script;
-- resume the controlled SQL Server deployment only when the ALPR feature is integrated into the larger host application and the approved backend/service account, connection string, and SQL permissions are available;
-- if the host application does not require central ALPR access-log storage, that requirement must be explicitly re-evaluated during integration rather than silently deploying an unused table.
-
-BE-WP-004 is **not DONE** because the required target-environment validation has not occurred.
+- resume controlled SQL Server deployment only during host integration if that architecture still requires central ALPR log storage;
+- do not treat the target deployment as complete until target-environment validation exists.
 
 ## Host application integration ownership
 
-The future integration of the accepted AVAX ALPR Guard capability into the larger Android application is **outside the current implementation scope of this project**.
-
-Integration execution is intentionally handed off to the user's manager / owner of the larger host application.
+The future integration of the accepted AVAX ALPR Guard capability into the larger Android application is outside the current implementation scope and is intentionally handed off to the user's manager / owner of the larger host application.
 
 Therefore:
 
-- `MOB-INT-WP-001 — Extract Guard ALPR as Host-Integrable Android Feature` is **not opened as an active project task**;
-- no integration refactor should be performed now;
-- no module extraction, package moves, host navigation changes, host DI changes, or host database changes should be made in the standalone Guard repository for speculative integration;
-- the accepted standalone Guard baseline must remain available as the reference implementation;
-- `documentation/GUARD_CODEBASE_MAP.md` and `documentation/GUARD_INTEGRATION_GUIDE.md` are handoff/reference material for the manager who performs the integration later;
-- `BE-WP-004` should be revisited by that integration owner only if the final host architecture still requires the standalone central ALPR log persistence path.
+- `MOB-INT-WP-001` is not opened as an active project task;
+- no speculative integration refactor should be performed now;
+- the standalone Guard implementation remains the reference;
+- `documentation/GUARD_CODEBASE_MAP.md` and `documentation/GUARD_INTEGRATION_GUIDE.md` remain integration handoff/reference material.
 
 ## Current project direction
 
-There is currently **no mandatory active implementation work package** after the accepted Guard MVP within the user's current execution scope.
-
-The project remains in:
+The active presentation branch is now:
 
 ```text
-Guard MVP: ACCEPTED / CLOSED
-Guard baseline: BUG FIX ONLY
+Guard master baseline: ACCEPTED REFERENCE
+Operator UI branch: feature/guard-operator-ui
+MOB-UX-WP-001: DONE / NOT MERGED
 Host integration: HANDED OFF TO MANAGER
 BE-WP-004 target deployment: DEFERRED TO HOST INTEGRATION IF STILL REQUIRED
 ```
 
-New development should begin only for:
-
-- a real bug discovered in the accepted Guard baseline;
-- a newly approved requirement;
-- a measured field issue that justifies reopening deferred AI/mobile work;
-- a future request from the host-integration owner.
+Potential next work, if approved, is driver display metadata and opportunistic driver-photo loading for the operator result overlay. This must remain offline-first for authoritative data; photo loading must never block access verification or result display.
 
 ## Governance
 
 - Only Master-confirmed implementation and validation may be marked `DONE`.
+- Feature-branch acceptance does not imply merge approval.
 - Deferred does not mean cancelled.
 - Blocked work must preserve its blocker explicitly rather than being treated as complete.
 - AI never decides access.
 - Guard Mobile never connects directly to SQL Server.
 - Manager/Admin server-side communication passes through Backend API.
-- New Guard features require a new Master-approved work package; the accepted MVP baseline is now bug-fix only.
+- Any driver-photo enhancement must remain non-authoritative and asynchronous.
